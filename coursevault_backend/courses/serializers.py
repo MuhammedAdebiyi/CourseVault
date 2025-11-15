@@ -1,14 +1,15 @@
 from rest_framework import serializers
-from .models import Course, PDF
+from .models import Folder, PDF
 
 class PDFSerializer(serializers.ModelSerializer):
     class Meta:
         model = PDF
         fields = "__all__"
 
-class CourseSerializer(serializers.ModelSerializer):
+
+class FolderSerializer(serializers.ModelSerializer):
     pdfs = PDFSerializer(many=True, read_only=True)
 
     class Meta:
-        model = Course
+        model = Folder
         fields = "__all__"

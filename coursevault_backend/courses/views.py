@@ -47,9 +47,17 @@ class PDFDeleteView(APIView):
         pdf.delete()
         return Response({"detail": "PDF deleted successfully"}, status=200)
 
-# ---------------------------
-# Folder Deletion
-# ---------------------------
+class PDFDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pdf_id):
+        pdf = get_object_or_404(PDF, id=pdf_id, folder__owner=request.user)
+        delete_file_from_r2(pdf.file.name)
+        pdf.delete()
+        logger.info(f"PDF deleted: {pdf.title} by {request.user.email}")
+        return Response({"detail": "PDF deleted successfully"}, status=200)
+
+
 class FolderDeleteView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -58,6 +66,7 @@ class FolderDeleteView(APIView):
         for pdf in folder.pdfs.all():
             delete_file_from_r2(pdf.file.name)
         folder.delete()
+        logger.info(f"Folder deleted: {folder.title} by {request.user.email}")
         return Response({"detail": "Folder and PDFs deleted successfully"}, status=200)
 
 # ---------------------------
@@ -93,4 +102,5 @@ class PDFViewSet(viewsets.ModelViewSet):
         return PDF.objects.filter(folder__owner=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save()
+        serializer.save()  
+        logger.info(f"PDF uploaded: {serializer.instance.title} by {self.request.user.email}")

@@ -6,10 +6,16 @@ from django.utils import timezone
 from datetime import timedelta
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.core.mail import send_mail
+from django.core.cache import cache
+import logging
+from rest_framework.permissions import IsAuthenticated
+import boto3
 from django.conf import settings
+from rest_framework.permissions import IsAuthenticated
 from .models import CustomUser, EmailVerificationCode
 from .serializers import (
+    PasswordResetRequestSerializer,
+    PasswordResetConfirmSerializer,
     RegisterSerializer,
     VerifyEmailSerializer,
     CustomTokenObtainPairSerializer
@@ -17,6 +23,13 @@ from .serializers import (
 from .tasks import send_verification_email_task
 from .email import send_verification_email
 
+# Logging setup
+logger = logging.getLogger("accounts")
+
+# Brute-force and throttling settings
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_TIME = 15 * 60  # 15 minutes
+MAX_OTP_REQUESTS_PER_HOUR = 3
 
 class RegisterView(generics.CreateAPIView):
     """
@@ -27,19 +40,15 @@ class RegisterView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         user = serializer.save()
-        # Generate the latest verification code 
         code_obj = EmailVerificationCode.objects.filter(user=user).order_by("-created_at").first()
         if code_obj:
-            # Send async email via Celery
             send_verification_email_task.delay(user.id, code_obj.id)
-            # Optional sync fallback
-            # send_verification_email(user, code_obj)
+        logger.info(f"User registered: {user.email} at {timezone.now()}")
 
 
 class VerifyEmailView(generics.GenericAPIView):
     """
-    Verify user's email using the code.
-    Returns JWT tokens upon success.
+    Verify user's email using the code and return JWT tokens.
     """
     serializer_class = VerifyEmailSerializer
     permission_classes = [AllowAny]
@@ -51,32 +60,26 @@ class VerifyEmailView(generics.GenericAPIView):
         email = serializer.validated_data["email"]
         code = serializer.validated_data["code"]
 
-        # Get user
         try:
             user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
             return Response({"error": "User not found"}, status=404)
 
-        # Get verification code
         try:
             verification = EmailVerificationCode.objects.get(user=user, code=code)
         except EmailVerificationCode.DoesNotExist:
             return Response({"error": "Invalid verification code"}, status=400)
 
-        # Check expiration
         if timezone.now() > verification.created_at + timedelta(minutes=10):
             verification.delete()
             return Response({"error": "Code has expired"}, status=400)
 
-        # Mark verified
         user.email_verified = True
         user.save()
-
-        # Remove used code
         verification.delete()
 
-        # Issue JWT
         refresh = RefreshToken.for_user(user)
+        logger.info(f"Email verified: {user.email} at {timezone.now()}")
 
         return Response({
             "message": "Email verified successfully!",
@@ -84,11 +87,35 @@ class VerifyEmailView(generics.GenericAPIView):
             "refresh": str(refresh)
         }, status=200)
 
+
 class CustomTokenObtainPairView(TokenObtainPairView):
     """
-    Custom JWT login using email. Requires verified email.
+    JWT login with email verification and brute-force protection.
     """
     serializer_class = CustomTokenObtainPairSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get("email")
+        cache_key = f"login_attempts_{email}"
+        attempts = cache.get(cache_key, 0)
+
+        if attempts >= MAX_LOGIN_ATTEMPTS:
+            return Response(
+                {"detail": f"Too many login attempts. Try again in {LOCKOUT_TIME // 60} minutes."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
+        response = super().post(request, *args, **kwargs)
+
+        if response.status_code != 200:
+            cache.set(cache_key, attempts + 1, LOCKOUT_TIME)
+            logger.warning(f"Failed login attempt for {email} at {timezone.now()}")
+        else:
+            cache.delete(cache_key)
+            logger.info(f"User logged in: {email} at {timezone.now()}")
+
+        return response
 
 
 class ResendCodeView(APIView):
@@ -104,20 +131,17 @@ class ResendCodeView(APIView):
         except CustomUser.DoesNotExist:
             return Response({"detail": "No user with that email"}, status=404)
 
-        # Rate limiting: max 3 codes per hour
         one_hour_ago = timezone.now() - timedelta(hours=1)
         recent_count = EmailVerificationCode.objects.filter(user=user, created_at__gte=one_hour_ago).count()
-        if recent_count >= 3:
+        if recent_count >= MAX_OTP_REQUESTS_PER_HOUR:
             return Response({"detail": "Too many requests, try later"}, status=429)
 
-        # Create new code and reset attempts
         code_obj = EmailVerificationCode.create_for_user(user)
         code_obj.attempts = 0
         code_obj.save(update_fields=["attempts"])
-
-        # Send email (async)
         send_verification_email_task.delay(user.id, code_obj.id)
 
+        logger.info(f"Verification code resent to {user.email} at {timezone.now()}")
         return Response({"detail": "Verification code resent"}, status=200)
 
 
@@ -134,20 +158,47 @@ class PasswordResetRequestView(APIView):
         except CustomUser.DoesNotExist:
             return Response({"detail": "User not found"}, status=404)
 
-        # Create a verification code for password reset
         code_obj = EmailVerificationCode.create_for_user(user, purpose="password_reset")
-
-        # Send email
         send_verification_email_task.delay(user.id, code_obj.id, purpose="password_reset")
 
+        logger.info(f"Password reset requested for {user.email} at {timezone.now()}")
         return Response({"detail": "Password reset code sent"}, status=200)
 
 
 class PasswordResetConfirmView(APIView):
-    permission_classes = [AllowAny]
-
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response({"detail": "Password reset successfully"}, status=200)
+
+        logger.info(f"Password reset successfully for {serializer.validated_data['email']} at {timezone.now()}")
+        return Response({"message": "Password reset successfully"}, status=status.HTTP_200_OK)
+
+
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response({
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "email_verified": user.email_verified
+        })
+
+    def patch(self, request):
+        user = request.user
+        data = request.data
+        if "name" in data:
+            user.name = data["name"]
+        if "email" in data and data["email"] != user.email:
+            user.email = data["email"]
+            user.email_verified = False  # Require re-verification
+        user.save()
+        return Response({
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "email_verified": user.email_verified
+        })

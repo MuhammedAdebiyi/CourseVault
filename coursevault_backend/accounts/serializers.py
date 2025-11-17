@@ -3,8 +3,15 @@ from django.contrib.auth import authenticate
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import CustomUser, EmailVerificationCode
 from django.utils import timezone
+from django.core.cache import cache
+import logging
 
 MAX_ATTEMPTS = 5
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_TIME = 15 * 60  # 15 minutes
+
+logger = logging.getLogger("accounts")
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -21,6 +28,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
         # Generate a verification code
         EmailVerificationCode.create_for_user(user)
+        logger.info(f"User registered: {user.email} at {timezone.now()}")
         return user
 
 
@@ -65,6 +73,8 @@ class VerifyEmailSerializer(serializers.Serializer):
 
         attrs["user"] = user
         attrs["record"] = verification
+
+        logger.info(f"Email verified for user: {user.email} at {timezone.now()}")
         return attrs
 
     def save(self):
@@ -78,13 +88,27 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         email = attrs.get("email")
         password = attrs.get("password")
 
+        cache_key = f"login_attempts_{email}"
+        attempts = cache.get(cache_key, 0)
+
+        if attempts >= MAX_LOGIN_ATTEMPTS:
+            raise serializers.ValidationError(
+                f"Too many login attempts. Try again in {LOCKOUT_TIME // 60} minutes."
+            )
+
         user = authenticate(email=email, password=password)
 
         if not user:
+            cache.set(cache_key, attempts + 1, LOCKOUT_TIME)
+            logger.warning(f"Failed login attempt for {email} at {timezone.now()}")
             raise serializers.ValidationError("Invalid credentials")
 
         if not user.email_verified:
             raise serializers.ValidationError("Email not verified")
+
+        # Reset failed attempts on successful login
+        cache.delete(cache_key)
+        logger.info(f"User logged in: {email} at {timezone.now()}")
 
         data = super().validate(attrs)
         data["user"] = {
@@ -93,8 +117,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             "name": user.name
         }
         return data
-    
-    
+
+
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
@@ -136,4 +160,36 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
 
         code_obj.used = True
         code_obj.save()
+
+        logger.info(f"Password reset for user: {user.email} at {timezone.now()}")
         return user
+
+
+class ResendVerificationCodeSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate(self, attrs):
+        email = attrs.get("email")
+
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            raise serializers.ValidationError("User not found")
+
+        if user.email_verified:
+            raise serializers.ValidationError("Email already verified")
+
+        attrs["user"] = user
+        return attrs
+
+    def save(self):
+        user = self.validated_data["user"]
+        EmailVerificationCode.create_for_user(user)
+        logger.info(f"Resent verification code to user: {user.email} at {timezone.now()}")
+        return {"message": "Verification code resent"}
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ["id", "email", "name", "email_verified"]
+        read_only_fields = ["id", "email", "email_verified"]

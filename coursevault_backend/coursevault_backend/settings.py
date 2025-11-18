@@ -7,16 +7,14 @@ import logging
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ==========================
 # SECURITY
-# ==========================
+
 SECRET_KEY = '***REMOVED***'
 DEBUG = True
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
-# ==========================
 # INSTALLED APPS
-# ==========================
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -24,20 +22,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
-    # Third-party
     'rest_framework',
     'corsheaders',
     'storages',
-
-    # Local apps
     'accounts',
     'courses',
 ]
 
-# ==========================
 # MIDDLEWARE
-# ==========================
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -51,9 +44,9 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'coursevault_backend.urls'
 
-# ==========================
+
 # TEMPLATES
-# ==========================
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -71,19 +64,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'coursevault_backend.wsgi.application'
 
-# ==========================
+
 # AUTH
-# ==========================
+
 AUTH_USER_MODEL = "accounts.CustomUser"
 
-# ==========================
+
 # CORS
-# ==========================
+
 CORS_ALLOW_ALL_ORIGINS = True
 
-# ==========================
+
 # DATABASE
-# ==========================
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -91,9 +84,9 @@ DATABASES = {
     }
 }
 
-# ==========================
+
 # REST FRAMEWORK
-# ==========================
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -103,9 +96,8 @@ REST_FRAMEWORK = {
     ),
 }
 
-# ==========================
 # CELERY
-# ==========================
+
 CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
 CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379/0"
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -113,9 +105,9 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "Africa/Lagos"
 
-# ==========================
-# EMAIL (GMAIL SMTP)
-# ==========================
+
+# SMTP
+
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 465
@@ -124,24 +116,24 @@ EMAIL_HOST_USER = "devbyadebiyi@gmail.com"
 EMAIL_HOST_PASSWORD = "***REMOVED***"
 DEFAULT_FROM_EMAIL = "CourseVault <devbyadebiyi@gmail.com>"
 
-# ==========================
+
 # INTERNATIONALIZATION
-# ==========================
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# ==========================
+
 # STATIC FILES
-# ==========================
+
 STATIC_URL = 'static/'
 
-# ==========================
+
 # CLOUDFLARE R2 STORAGE
-# ==========================
+
 STORAGES = {
-    "default": {  # For media files (FileField / ImageField)
+    "default": {  
         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         "OPTIONS": {
             "access_key": "***REMOVED***",
@@ -150,14 +142,14 @@ STORAGES = {
             "endpoint_url": "https://04ae8418853853c716df4f26bbc75fdd.r2.cloudflarestorage.com",
         },
     },
-    "staticfiles": {  # For collectstatic / static files
+    "staticfiles": {  
         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         "OPTIONS": {
             "access_key": "***REMOVED***",
             "secret_key": "***REMOVED***",
             "bucket_name": "coursevault-files",
             "endpoint_url": "https://04ae8418853853c716df4f26bbc75fdd.r2.cloudflarestorage.com",
-            "location": "static",  # optional: store all static files under 'static/' folder
+           
         },
     },
 }
@@ -169,9 +161,11 @@ AWS_DEFAULT_ACL = None
 AWS_QUERYSTRING_AUTH = False
 AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
 
-# STATIC FILES
-STATIC_URL = "/static/"
 
-STATICFILES_DIRS = [
-    BASE_DIR / "static",
-]
+if DEBUG:
+    STATICFILES_DIRS = []
+    STATIC_ROOT = BASE_DIR / "staticfiles"
+    STORAGES["staticfiles"] = {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+    }
+

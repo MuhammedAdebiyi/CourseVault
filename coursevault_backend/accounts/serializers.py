@@ -8,7 +8,7 @@ import logging
 
 MAX_ATTEMPTS = 5
 MAX_LOGIN_ATTEMPTS = 5
-LOCKOUT_TIME = 15 * 60  # 15 minutes
+LOCKOUT_TIME = 15 * 60  
 
 logger = logging.getLogger("accounts")
 

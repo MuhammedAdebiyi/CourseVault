@@ -23,12 +23,11 @@ from .serializers import (
 from .tasks import send_verification_email_task
 from .email import send_verification_email
 
-# Logging setup
 logger = logging.getLogger("accounts")
 
-# Brute-force and throttling settings
+
 MAX_LOGIN_ATTEMPTS = 5
-LOCKOUT_TIME = 15 * 60  # 15 minutes
+LOCKOUT_TIME = 15 * 60  
 MAX_OTP_REQUESTS_PER_HOUR = 3
 
 class RegisterView(generics.CreateAPIView):
@@ -194,7 +193,7 @@ class UserProfileView(APIView):
             user.name = data["name"]
         if "email" in data and data["email"] != user.email:
             user.email = data["email"]
-            user.email_verified = False  # Require re-verification
+            user.email_verified = False  
         user.save()
         return Response({
             "id": user.id,

@@ -12,7 +12,5 @@ urlpatterns = [
     path("resend-code/", ResendCodeView.as_view(), name="resend-code"),
     path("password-reset/", PasswordResetRequestView.as_view(), name="password-reset-request"),
     path("password-reset-confirm/", PasswordResetConfirmView.as_view(), name="password-reset-confirm"),
-    
-    # Profile endpoints
     path("me/", UserProfileView.as_view(), name="user-profile"),
 ]

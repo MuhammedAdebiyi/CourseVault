@@ -26,6 +26,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data["password"],
             name=validated_data["name"]
         )
+
+    # --- FIRST MONTH FREE ---
+        from django.utils import timezone
+        from datetime import timedelta
+
+        user.subscription_active = True  
+        user.subscription_due_date = timezone.now().date() + timedelta(days=30)
+        user.save()
+
+
         # Generate a verification code
         EmailVerificationCode.create_for_user(user)
         logger.info(f"User registered: {user.email} at {timezone.now()}")

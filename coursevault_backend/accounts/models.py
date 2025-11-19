@@ -12,7 +12,6 @@ class CustomUserManager(BaseUserManager):
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
-        username = models.SlugField(unique=True, max_length=50)
         user.save(using=self._db)
         return user
 
@@ -28,6 +27,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
+
+    subscription_active = models.BooleanField(default=False)
+    subscription_due_date = models.DateField(null=True, blank=True)
     objects = CustomUserManager()
 
     USERNAME_FIELD = "email"

@@ -3,6 +3,7 @@ from .models import Folder, PDF
 from django.conf import settings
 import boto3
 import logging
+from botocore.client import Config
 
 logger = logging.getLogger("courses")
 
@@ -13,18 +14,24 @@ s3_client = boto3.client(
     "s3",
     endpoint_url=r2_opts["endpoint_url"],
     aws_access_key_id=r2_opts["access_key"],
-    aws_secret_access_key=r2_opts["secret_key"]
+    aws_secret_access_key=r2_opts["secret_key"],
+    config=Config(signature_version="s3v4")  # Ensure SigV4
 )
 
 R2_BUCKET = r2_opts["bucket_name"]
 
 def generate_presigned_url(file_name, expires_in=3600):
-    """Generate a temporary signed URL for a PDF."""
-    key = file_name.replace("pdfs/", "")
+    """Generate a temporary signed URL for a PDF with original filename."""
+    key = file_name  # Keep full path including 'pdfs/'
+    original_filename = file_name.split("/")[-1]  # extract actual filename
     try:
         url = s3_client.generate_presigned_url(
             'get_object',
-            Params={'Bucket': R2_BUCKET, 'Key': key},
+            Params={
+                'Bucket': R2_BUCKET,
+                'Key': key,
+                'ResponseContentDisposition': f'attachment; filename="{original_filename}"'
+            },
             ExpiresIn=expires_in
         )
         return url
@@ -39,11 +46,10 @@ class PDFSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PDF
-        fields = ["id", "title", "file", "uploaded_at", "download_url", "folder"]  # ✅ added folder
+        fields = ["id", "title", "file", "uploaded_at", "download_url", "folder"]
 
     def get_download_url(self, obj):
         request = self.context.get("request")
-        # If folder is public, generate signed URL
         if obj.folder.is_public or (request and request.user == obj.folder.owner):
             return generate_presigned_url(obj.file.name)
         return None

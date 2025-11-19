@@ -20,8 +20,8 @@ class Folder(models.Model):
 
 class PDF(models.Model):
     folder = models.ForeignKey(Folder, related_name="pdfs", on_delete=models.CASCADE)
-    title = models.CharField(max_length=200)
-    file = models.FileField(upload_to="pdfs/")
+    title = models.CharField(max_length=255)
+    file = models.FileField(upload_to="pdfs/", max_length=1000)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

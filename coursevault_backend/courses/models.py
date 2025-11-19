@@ -1,11 +1,18 @@
 from django.db import models
-from accounts.models import CustomUser
+from django.conf import settings
+from django.utils.text import slugify
+import uuid
 
 class Folder(models.Model):
-    title = models.CharField(max_length=100)
-    slug = models.SlugField(unique=True)
-    owner = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    is_public = models.BooleanField(default=True)
+    title = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True, blank=True)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    is_public = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(f"{self.title}-{uuid.uuid4().hex[:8]}")
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.title

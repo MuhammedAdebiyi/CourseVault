@@ -193,3 +193,18 @@ class UserSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = ["id", "email", "name", "email_verified"]
         read_only_fields = ["id", "email", "email_verified"]
+
+        
+class PublicUserSerializer(serializers.ModelSerializer):
+    public_folders = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CustomUser
+        fields = ["id", "name", "public_folders"]
+
+    def get_public_folders(self, user):
+        from courses.models import Folder
+        from courses.serializers import FolderSerializer
+
+        public_folders = Folder.objects.filter(owner=user, is_public=True)
+        return FolderSerializer(public_folders, many=True, context=self.context).data

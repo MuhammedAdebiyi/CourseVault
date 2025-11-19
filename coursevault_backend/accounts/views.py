@@ -4,10 +4,13 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from django.utils import timezone
 from datetime import timedelta
+from django.shortcuts import get_object_or_404
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.core.cache import cache
 import logging
+from .models import CustomUser
+from .serializers import PublicUserSerializer
 from rest_framework.permissions import IsAuthenticated
 import boto3
 from django.conf import settings
@@ -201,3 +204,11 @@ class UserProfileView(APIView):
             "name": user.name,
             "email_verified": user.email_verified
         })
+    
+class PublicUserView(generics.RetrieveAPIView):
+    permission_classes = []  # Public access
+    serializer_class = PublicUserSerializer
+
+    def get(self, request, user_id):
+        user = get_object_or_404(CustomUser, id=user_id)
+        return Response(self.serializer_class(user, context={"request": request}).data)

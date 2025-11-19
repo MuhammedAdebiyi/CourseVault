@@ -169,3 +169,4 @@ if DEBUG:
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
     }
 
+    

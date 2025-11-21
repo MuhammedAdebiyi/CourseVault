@@ -16,6 +16,9 @@ import boto3
 from django.conf import settings
 from rest_framework.permissions import IsAuthenticated
 from .models import CustomUser, EmailVerificationCode
+from folders.models import PDF, Folder
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from .serializers import (
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
@@ -33,6 +36,40 @@ MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_TIME = 15 * 60  
 MAX_OTP_REQUESTS_PER_HOUR = 3
 
+
+class CustomerDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        total_pdfs = PDF.objects.filter(folder__owner=user).count()
+        total_folders = Folder.objects.filter(owner=user).count()
+        recent_uploads = PDF.objects.filter(folder__owner=user).order_by("-uploaded_at")[:5]
+
+        return Response({
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "email_verified": user.email_verified,
+                "is_premium": getattr(user, "is_premium", False)
+            },
+            "stats": {
+                "pdf_count": total_pdfs,
+                "folder_count": total_folders,
+                "recent_uploads": [
+                    {
+                        "id": pdf.id,
+                        "name": pdf.title,
+                        "uploaded_at": pdf.uploaded_at
+                    }
+                    for pdf in recent_uploads
+                ]
+            }
+        })
+
+
 class RegisterView(generics.CreateAPIView):
     """
     Register a new user and send verification email.
@@ -48,6 +85,7 @@ class RegisterView(generics.CreateAPIView):
         logger.info(f"User registered: {user.email} at {timezone.now()}")
 
 
+@method_decorator(csrf_exempt, name="dispatch")
 class VerifyEmailView(generics.GenericAPIView):
     """
     Verify user's email using the code and return JWT tokens.
@@ -120,6 +158,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         return response
 
 
+@method_decorator(csrf_exempt, name="dispatch")
 class ResendCodeView(APIView):
     permission_classes = [AllowAny]
 
@@ -133,19 +172,32 @@ class ResendCodeView(APIView):
         except CustomUser.DoesNotExist:
             return Response({"detail": "No user with that email"}, status=404)
 
+        # anti-spam limit: max requests/hour
         one_hour_ago = timezone.now() - timedelta(hours=1)
-        recent_count = EmailVerificationCode.objects.filter(user=user, created_at__gte=one_hour_ago).count()
+        recent_count = EmailVerificationCode.objects.filter(
+            user=user, created_at__gte=one_hour_ago
+        ).count()
+
         if recent_count >= MAX_OTP_REQUESTS_PER_HOUR:
             return Response({"detail": "Too many requests, try later"}, status=429)
 
+        # delete old verification codes
+        EmailVerificationCode.objects.filter(user=user).delete()
+
+        # create new code
         code_obj = EmailVerificationCode.create_for_user(user)
         code_obj.attempts = 0
         code_obj.save(update_fields=["attempts"])
+
+        # send email async
         send_verification_email_task.delay(user.id, code_obj.id)
 
         logger.info(f"Verification code resent to {user.email} at {timezone.now()}")
-        return Response({"detail": "Verification code resent"}, status=200)
 
+        return Response({
+            "detail": "Verification code resent",
+            "wait": 30  # frontend cooldown timer
+        }, status=200)
 
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]

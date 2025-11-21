@@ -1,16 +1,47 @@
 "use client";
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function SignUpPage() {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // handle signup logic here
-    console.log({ name, email, password, confirmPassword });
+
+    if (password !== confirmPassword) {
+      alert("Passwords do not match!");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/register/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const data = await response.json();
+      setLoading(false);
+
+      if (response.ok) {
+        alert("Registration successful! Please verify your email.");
+        // Redirect to verify-email page with email query param
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+      } else {
+        alert(data.detail || JSON.stringify(data));
+      }
+    } catch (error) {
+      setLoading(false);
+      console.error("Error:", error);
+      alert("Something went wrong. Please try again.");
+    }
   };
 
   return (
@@ -73,8 +104,9 @@ export default function SignUpPage() {
           <button
             type="submit"
             className="w-full bg-black text-white py-2 rounded hover:bg-gray-800 transition"
+            disabled={loading}
           >
-            Sign Up
+            {loading ? "Registering..." : "Sign Up"}
           </button>
         </form>
 

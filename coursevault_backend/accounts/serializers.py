@@ -213,8 +213,8 @@ class PublicUserSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "public_folders"]
 
     def get_public_folders(self, user):
-        from courses.models import Folder
-        from courses.serializers import FolderSerializer
+        from folders.models import Folder
+        from folders.serializers import FolderSerializer
 
         public_folders = Folder.objects.filter(owner=user, is_public=True)
         return FolderSerializer(public_folders, many=True, context=self.context).data

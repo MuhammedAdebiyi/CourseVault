@@ -1,7 +1,25 @@
 "use client";
+import { useState, useEffect } from "react";
 import 'bootstrap-icons/font/bootstrap-icons.css';
+import LoadingSpinner from "../app/components/LoadingSpinner";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  // Simulate loading (you can replace this with actual API fetching)
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1000); // 1s delay
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleGetStarted = () => {
+    router.push("/signup");
+  };
+
+  if (loading) return <LoadingSpinner />;
+
   return (
     <main className="min-h-screen flex flex-col">
       {/* Hero Section */}
@@ -12,7 +30,10 @@ export default function Home() {
         <p className="text-lg text-gray-800 max-w-2xl mb-8">
           CourseVault is your secure PDF organizer for courses. Create courses, organize files into folders, and easily access all your study materials in one place.
         </p>
-        <button className="px-6 py-3 border border-black rounded font-medium hover:bg-black hover:text-white transition">
+        <button 
+          onClick={handleGetStarted}
+          className="px-6 py-3 border border-black rounded font-medium hover:bg-black hover:text-white transition"
+        >
           Get Started Free
         </button>
       </section>

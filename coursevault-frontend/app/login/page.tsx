@@ -1,14 +1,34 @@
 "use client";
 import React, { useState } from "react";
+import axios from "axios";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // handle login logic here
-    console.log({ email, password });
+    setError("");
+
+    try {
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/token/`, // replace with your DRF token endpoint
+        { email, password }
+      );
+
+      // Store tokens in localStorage (or cookies)
+      localStorage.setItem("access", response.data.access);
+      localStorage.setItem("refresh", response.data.refresh);
+
+      // Redirect to dashboard
+      router.push("/dashboard");
+    } catch (err: any) {
+      console.error(err);
+      setError("Invalid email or password");
+    }
   };
 
   return (
@@ -18,6 +38,8 @@ export default function LoginPage() {
         <p className="text-center text-gray-700 mb-6">
           Login to access your courses and PDFs
         </p>
+
+        {error && <p className="text-red-500 mb-4 text-center">{error}</p>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

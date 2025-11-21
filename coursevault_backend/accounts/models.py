@@ -25,6 +25,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     name = models.CharField(max_length=100)
     email_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    subscription_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
 
 
@@ -64,3 +65,4 @@ class EmailVerificationCode(models.Model):
             code=code,
             expires_at=timezone.now() + timedelta(minutes=ttl_minutes)
         )
+

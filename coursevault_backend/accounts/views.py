@@ -43,9 +43,21 @@ class CustomerDashboardView(APIView):
     def get(self, request):
         user = request.user
 
+        # Fetch folders
+        folders = Folder.objects.filter(owner=user)
+        folder_data = [
+            {
+                "id": f.id,
+                "title": f.title,
+                "slug": f.slug,
+                "files_count": f.pdf_set.count(),
+                "last_updated": f.updated_at.isoformat(),
+            }
+            for f in folders
+        ]
+
+        # Fetch some stats
         total_pdfs = PDF.objects.filter(folder__owner=user).count()
-        total_folders = Folder.objects.filter(owner=user).count()
-        recent_uploads = PDF.objects.filter(folder__owner=user).order_by("-uploaded_at")[:5]
 
         return Response({
             "user": {
@@ -55,19 +67,13 @@ class CustomerDashboardView(APIView):
                 "email_verified": user.email_verified,
                 "is_premium": getattr(user, "is_premium", False)
             },
+            "folders": folder_data,
             "stats": {
                 "pdf_count": total_pdfs,
-                "folder_count": total_folders,
-                "recent_uploads": [
-                    {
-                        "id": pdf.id,
-                        "name": pdf.title,
-                        "uploaded_at": pdf.uploaded_at
-                    }
-                    for pdf in recent_uploads
-                ]
+                "folder_count": folders.count(),
             }
         })
+
 
 
 class RegisterView(generics.CreateAPIView):
@@ -88,38 +94,46 @@ class RegisterView(generics.CreateAPIView):
 @method_decorator(csrf_exempt, name="dispatch")
 class VerifyEmailView(generics.GenericAPIView):
     """
-    Verify user's email using the code and return JWT tokens.
+    Verify user's email with code and return JWT tokens.
     """
     serializer_class = VerifyEmailSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [AllowAny]   # <-- PUBLIC ENDPOINT
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        email = serializer.validated_data["email"]
-        code = serializer.validated_data["code"]
+        email = serializer.validated_data.get("email")
+        code = serializer.validated_data.get("code")
 
+        # 1. Check if user exists
         try:
             user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
             return Response({"error": "User not found"}, status=404)
 
+        # 2. Check verification code
         try:
-            verification = EmailVerificationCode.objects.get(user=user, code=code)
+            verification = EmailVerificationCode.objects.get(
+                user=user, code=code
+            )
         except EmailVerificationCode.DoesNotExist:
             return Response({"error": "Invalid verification code"}, status=400)
 
+        # 3. Check expiration
         if timezone.now() > verification.created_at + timedelta(minutes=10):
             verification.delete()
             return Response({"error": "Code has expired"}, status=400)
 
+        # 4. Mark email verified
         user.email_verified = True
         user.save()
         verification.delete()
 
+        # 5. Generate JWT tokens
         refresh = RefreshToken.for_user(user)
-        logger.info(f"Email verified: {user.email} at {timezone.now()}")
+
+        logger.info(f"Email verified: {user.email}")
 
         return Response({
             "message": "Email verified successfully!",
@@ -127,11 +141,8 @@ class VerifyEmailView(generics.GenericAPIView):
             "refresh": str(refresh)
         }, status=200)
 
-
+@method_decorator(csrf_exempt, name="dispatch")
 class CustomTokenObtainPairView(TokenObtainPairView):
-    """
-    JWT login with email verification and brute-force protection.
-    """
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = [AllowAny]
 

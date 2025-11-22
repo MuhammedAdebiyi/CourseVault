@@ -1,14 +1,26 @@
 "use client";
+
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
+import api from "../utils/api";
+import GlobalLoader from "../components/LoadingSpinner";
+import SuccessDialog from "../components/SuccessDialog";
 
 export default function SignUpPage() {
   const router = useRouter();
+
+  // Form state
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  // UI state
   const [loading, setLoading] = useState(false);
+  const [successDialog, setSuccessDialog] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,38 +33,50 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/register/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
-      });
+      await api.post("/register/", { name, email, password });
 
-      const data = await response.json();
+      // Show success dialog
+      setSuccessDialog(true);
       setLoading(false);
 
-      if (response.ok) {
-        alert("Registration successful! Please verify your email.");
-        // Redirect to verify-email page with email query param
+      // Auto-close dialog & redirect to verify email
+      setTimeout(() => {
+        setSuccessDialog(false);
         router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-      } else {
-        alert(data.detail || JSON.stringify(data));
-      }
-    } catch (error) {
+      }, 2500);
+    } catch (err: any) {
       setLoading(false);
-      console.error("Error:", error);
-      alert("Something went wrong. Please try again.");
+      console.error("Registration error:", err.response?.data || err.message);
+      alert(err.response?.data?.detail || "Registration failed");
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white p-6">
-      <div className="w-full max-w-md border border-gray-200 rounded-lg p-6 shadow-md">
+    <div className="min-h-screen flex items-center justify-center bg-white p-6 relative">
+      {/* Global Loading Spinner */}
+      {loading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-50">
+          <GlobalLoader />
+          <p className="mt-4 text-white text-lg">Registering...</p>
+        </div>
+      )}
+
+      {/* Success Dialog */}
+      {successDialog && (
+        <SuccessDialog
+          title="Registration Successful!"
+          description="Please check your email to verify your account."
+        />
+      )}
+
+      <div className="w-full max-w-md border border-gray-200 rounded-lg p-6 shadow-md relative z-10">
         <h1 className="text-2xl font-bold text-center mb-2">CourseVault</h1>
         <p className="text-center text-gray-700 mb-6">
           Your secure PDF organizer for courses
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Name */}
           <div>
             <label className="block text-black mb-1">Full Name</label>
             <input
@@ -65,6 +89,7 @@ export default function SignUpPage() {
             />
           </div>
 
+          {/* Email */}
           <div>
             <label className="block text-black mb-1">Email</label>
             <input
@@ -77,28 +102,50 @@ export default function SignUpPage() {
             />
           </div>
 
-          <div>
+          {/* Password */}
+          <div className="relative">
             <label className="block text-black mb-1">Password</label>
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="••••••••"
-              className="w-full border border-gray-300 rounded px-3 py-2 text-black"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-black pr-10"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+            <span
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer text-gray-600"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? (
+                <AiOutlineEyeInvisible size={20} />
+              ) : (
+                <AiOutlineEye size={20} />
+              )}
+            </span>
           </div>
 
-          <div>
+          {/* Confirm Password */}
+          <div className="relative">
             <label className="block text-black mb-1">Confirm Password</label>
             <input
-              type="password"
+              type={showConfirmPassword ? "text" : "password"}
               placeholder="••••••••"
-              className="w-full border border-gray-300 rounded px-3 py-2 text-black"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-black pr-10"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
             />
+            <span
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer text-gray-600"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            >
+              {showConfirmPassword ? (
+                <AiOutlineEyeInvisible size={20} />
+              ) : (
+                <AiOutlineEye size={20} />
+              )}
+            </span>
           </div>
 
           <button
@@ -106,7 +153,7 @@ export default function SignUpPage() {
             className="w-full bg-black text-white py-2 rounded hover:bg-gray-800 transition"
             disabled={loading}
           >
-            {loading ? "Registering..." : "Sign Up"}
+            Sign Up
           </button>
         </form>
 

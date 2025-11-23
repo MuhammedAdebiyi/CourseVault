@@ -1,22 +1,35 @@
 "use client";
+
 import Link from "next/link";
+import { useAuth } from "@/src/context/AuthContext";
 
 export default function Navbar() {
-  return (
-    <nav className="bg-white shadow-md">
-      <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-        <Link href="/" className="text-2xl font-bold text-black">
-          CourseVault
-        </Link>
+  const { user, logout } = useAuth();
 
-        <div className="space-x-6 flex items-center">
-          <Link href="/login" className="px-4 py-2 border border-black rounded font-medium hover:bg-black hover:text-white transition">
-            Login
-          </Link>
-          <Link href="/signup" className="px-4 py-2 border border-black rounded font-medium hover:bg-black hover:text-white transition">
-            Sign Up
-          </Link>
-        </div>
+  return (
+    <nav className="w-full bg-white border-b shadow px-6 py-4 flex justify-between items-center">
+      <div className="text-xl font-bold">
+        <Link href="/">CourseVault</Link>
+      </div>
+
+      <div className="flex items-center gap-4">
+        {user ? (
+          <>
+            <Link href="/dashboard" className="hover:underline">Dashboard</Link>
+            <Link href="/profile" className="hover:underline">Profile</Link>
+            <button
+              onClick={logout}
+              className="px-3 py-1 bg-black text-white rounded hover:bg-gray-800"
+            >
+              Logout
+            </button>
+          </>
+        ) : (
+          <>
+            <Link href="/login" className="hover:underline">Login</Link>
+            <Link href="/signup" className="hover:underline">Sign Up</Link>
+          </>
+        )}
       </div>
     </nav>
   );

@@ -7,6 +7,7 @@ import Link from "next/link";
 import api from "../utils/api";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { useAuth } from "@/src/context/AuthContext";
 
 // Modal Components
 import CreateFolderModal from "../components/CreateFolderModal";
@@ -25,13 +26,11 @@ interface FolderData {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { user, loadingUser } = useAuth();
 
   // State
   const [folders, setFolders] = useState<FolderData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userName, setUserName] = useState("User");
-  const [subscriptionStatus, setSubscriptionStatus] =
-    useState<"active" | "expired">("active");
 
   // Modals
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -47,38 +46,26 @@ export default function DashboardPage() {
     return "Good evening";
   };
 
-  // Fetch dashboard data
+  // Fetch folders after user is loaded
   useEffect(() => {
-    async function fetchDashboard() {
+    if (!user) return;
+
+    const fetchFolders = async () => {
       try {
-        const res = await api.get("/dashboard/");
-        console.log("DASHBOARD API RESPONSE:", res.data);
-
-        const { user_name, folders: fetchedFolders, free_until } = res.data;
-
-        setUserName(user_name || "User");
-
-        
-        setFolders(Array.isArray(fetchedFolders) ? fetchedFolders : []);
-
-          console.log("API FOLDERS RESPONSE:", fetchedFolders);
-        // Subscription check
-        if (free_until && new Date() > new Date(free_until)) {
-          setSubscriptionStatus("expired");
-          router.push("/payment");
-          return;
-        }
+        const res = await api.get("/folders/");
+        setFolders(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error(err);
       } finally {
         setLoading(false);
       }
-    }
+    };
 
-    fetchDashboard();
-  }, [router]);
+    fetchFolders();
 
-  // Summary stats
+   
+  }, [user, router]);
+
   const totalFolders = folders.length;
   const totalFiles = useMemo(
     () => folders.reduce((acc, f) => acc + f.files_count, 0),
@@ -95,7 +82,7 @@ export default function DashboardPage() {
     return new Date(sorted[0].last_updated).toLocaleString();
   }, [folders]);
 
-  if (loading) {
+  if (loading || loadingUser) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-white"></div>
@@ -108,8 +95,7 @@ export default function DashboardPage() {
       <Sidebar foldersCount={folders.length} />
 
       <main className="flex-1 p-6">
-        {/* Greeting */}
-        <h1 className="text-2xl font-bold mb-2">{`${getGreeting()}, ${userName}!`}</h1>
+        <h1 className="text-2xl font-bold mb-2">{`${getGreeting()}, ${user?.first_name || "User"}!`}</h1>
         <p className="text-gray-600 mb-6">Here’s your dashboard overview.</p>
 
         {/* Summary Cards */}
@@ -142,12 +128,10 @@ export default function DashboardPage() {
             <h3 className="text-gray-500">Subscription</h3>
             <p
               className={`text-2xl font-bold mt-2 ${
-                subscriptionStatus === "active"
-                  ? "text-green-600"
-                  : "text-red-600"
+                user?.is_subscribed ? "text-green-600" : "text-red-600"
               }`}
             >
-              {subscriptionStatus === "active" ? "Active" : "Expired"}
+              {user?.is_subscribed ? "Active" : "Expired"}
             </p>
           </motion.div>
 
@@ -162,7 +146,7 @@ export default function DashboardPage() {
           </motion.div>
         </div>
 
-        {/* Create Folder Button */}
+        {/* + Create Folder button */}
         <div className="mb-4">
           <button
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -218,81 +202,81 @@ export default function DashboardPage() {
             </motion.div>
           ))}
         </div>
-      </main>
 
-      {/* Modals */}
-      {createModalOpen && (
-        <CreateFolderModal
-          open={createModalOpen}
-          onClose={() => setCreateModalOpen(false)}
-          parentId={null}
-          onCreate={async ({ name, parentId }) => {
-            try {
-              const res = await api.post("/folders/", { name, parentId });
-              setFolders((prev) => [res.data, ...prev]);
-              setCreateModalOpen(false);
-            } catch (err) {
-              console.error(err);
-            }
-          }}
-        />
-      )}
+        {/* Modals */}
+        {createModalOpen && (
+          <CreateFolderModal
+            open={createModalOpen}
+            onClose={() => setCreateModalOpen(false)}
+            parentId={null}
+            onCreate={async ({ name, parentId }) => {
+              try {
+                const res = await api.post("/folders/", { name, parentId });
+                setFolders((prev) => [res.data, ...prev]);
+                setCreateModalOpen(false);
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+          />
+        )}
 
-      {renameModalOpen && (
-        <RenameFolderModal
-          folder={renameModalOpen}
-          onClose={() => setRenameModalOpen(null)}
-          onRename={async (updatedPayload) => {
-            try {
-              const updated = await api.put(
-                `/folders/${renameModalOpen?.id}/`,
-                updatedPayload
-              );
+        {renameModalOpen && (
+          <RenameFolderModal
+            folder={renameModalOpen}
+            onClose={() => setRenameModalOpen(null)}
+            onRename={async (updatedPayload) => {
+              try {
+                const updated = await api.put(
+                  `/folders/${renameModalOpen?.id}/`,
+                  updatedPayload
+                );
+                setFolders((prev) =>
+                  prev.map((f) =>
+                    f.id === updated.data.id ? updated.data : f
+                  )
+                );
+                setRenameModalOpen(null);
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+          />
+        )}
+
+        {deleteModalOpen && (
+          <DeleteFolderModal
+            folder={deleteModalOpen}
+            onClose={() => setDeleteModalOpen(null)}
+            onDelete={async (id) => {
+              try {
+                await api.delete(`/folders/${id}/`);
+                setFolders((prev) => prev.filter((f) => f.id !== id));
+                setDeleteModalOpen(null);
+              } catch (err) {
+                console.error(err);
+              }
+            }}
+          />
+        )}
+
+        {uploadModalOpen && (
+          <UploadPDFModal
+            folder={uploadModalOpen}
+            onClose={() => setUploadModalOpen(null)}
+            onPDFUploaded={(folderId, pdf) => {
               setFolders((prev) =>
                 prev.map((f) =>
-                  f.id === updated.data.id ? updated.data : f
+                  f.id === folderId
+                    ? { ...f, files_count: f.files_count + 1 }
+                    : f
                 )
               );
-              setRenameModalOpen(null);
-            } catch (err) {
-              console.error(err);
-            }
-          }}
-        />
-      )}
-
-      {deleteModalOpen && (
-        <DeleteFolderModal
-          folder={deleteModalOpen}
-          onClose={() => setDeleteModalOpen(null)}
-          onDelete={async (id) => {
-            try {
-              await api.delete(`/folders/${id}/`);
-              setFolders((prev) => prev.filter((f) => f.id !== id));
-              setDeleteModalOpen(null);
-            } catch (err) {
-              console.error(err);
-            }
-          }}
-        />
-      )}
-
-      {uploadModalOpen && (
-        <UploadPDFModal
-          folder={uploadModalOpen}
-          onClose={() => setUploadModalOpen(null)}
-          onPDFUploaded={(folderId, pdf) => {
-            setFolders((prev) =>
-              prev.map((f) =>
-                f.id === folderId
-                  ? { ...f, files_count: f.files_count + 1 }
-                  : f
-              )
-            );
-            setUploadModalOpen(null);
-          }}
-        />
-      )}
+              setUploadModalOpen(null);
+            }}
+          />
+        )}
+      </main>
     </div>
   );
 }

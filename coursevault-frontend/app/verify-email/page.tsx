@@ -3,11 +3,14 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/app/utils/api";
+import { useAuth } from "@/src/context/AuthContext";
 
 export default function VerifyCodePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
+
+  const { setUser } = useAuth();
 
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -19,21 +22,19 @@ export default function VerifyCodePage() {
 
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
 
-  // Countdown timer logic
+  // Countdown timer
   useEffect(() => {
     if (timer <= 0) return;
-    const interval = setInterval(() => setTimer((t) => t - 1), 1000);
+    const interval = setInterval(() => setTimer(t => t - 1), 1000);
     return () => clearInterval(interval);
   }, [timer]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
-    const val = e.target.value.replace(/\D/g, ""); // only digits
-
+    const val = e.target.value.replace(/\D/g, "");
     if (val.length > 1) return;
 
     const codeArr = code.split("");
     while (codeArr.length < 6) codeArr.push("");
-
     codeArr[idx] = val;
     setCode(codeArr.join(""));
 
@@ -48,7 +49,7 @@ export default function VerifyCodePage() {
     }
   };
 
-  // Submit verification code
+  // SUBMIT CODE
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -56,7 +57,6 @@ export default function VerifyCodePage() {
       setError("Please enter the 6-digit code.");
       return;
     }
-
     if (!email) {
       setError("Email is missing. Please register again.");
       return;
@@ -66,14 +66,16 @@ export default function VerifyCodePage() {
     setError("");
 
     try {
-      const res = await api.post("/verify-email/", {
-        email,
-        code,
-      });
+      const res = await api.post("/verify-email/", { email, code });
 
+      // Save tokens
       localStorage.setItem("access_token", res.data.access);
       localStorage.setItem("refresh_token", res.data.refresh);
 
+      // Store user in context
+      setUser(res.data.user);
+
+      // Navigate to dashboard
       router.push("/dashboard");
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Invalid code. Please try again.");
@@ -82,7 +84,7 @@ export default function VerifyCodePage() {
     }
   };
 
-  // Resend verification code
+  // RESEND CODE
   const handleResend = async () => {
     if (!email) return;
 
@@ -91,9 +93,9 @@ export default function VerifyCodePage() {
 
     try {
       await api.post("/resend-code/", { email });
-      setTimer(30); // reset cooldown
-    } catch (err: any) {
-      setError("Could not resend code. Try again later.");
+      setTimer(30);
+    } catch (err) {
+      setError("Could not resend the code. Try again later.");
     } finally {
       setResending(false);
     }
@@ -111,9 +113,7 @@ export default function VerifyCodePage() {
               type="text"
               inputMode="numeric"
               maxLength={1}
-              ref={(el: HTMLInputElement | null): void => {
-                inputsRef.current[idx] = el;
-              }}
+              ref={(el: HTMLInputElement | null) => { inputsRef.current[idx] = el; }}
               value={code[idx] || ""}
               onChange={(e) => handleChange(e, idx)}
               onKeyDown={(e) => handleKeyDown(e, idx)}
@@ -124,7 +124,6 @@ export default function VerifyCodePage() {
 
         {error && <p className="text-red-500 mt-2">{error}</p>}
 
-        {/* Verify Button */}
         <button
           type="submit"
           disabled={loading}
@@ -133,7 +132,6 @@ export default function VerifyCodePage() {
           {loading ? "Verifying..." : "Verify"}
         </button>
 
-        {/* Resend Section */}
         <div className="mt-4 text-center">
           {timer > 0 ? (
             <p className="text-gray-500">

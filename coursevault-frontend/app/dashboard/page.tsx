@@ -5,7 +5,6 @@ import { Folder } from "react-bootstrap-icons";
 import Sidebar from "../components/SideBar";
 import Link from "next/link";
 import api from "../utils/api";
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/src/context/AuthContext";
 
@@ -25,20 +24,17 @@ interface FolderData {
 }
 
 export default function DashboardPage() {
-  const router = useRouter();
   const { user, loadingUser } = useAuth();
-
-  // State
   const [folders, setFolders] = useState<FolderData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingFolders, setLoadingFolders] = useState(true);
 
-  // Modals
+  // Modal states
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [renameModalOpen, setRenameModalOpen] = useState<FolderData | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState<FolderData | null>(null);
   const [uploadModalOpen, setUploadModalOpen] = useState<FolderData | null>(null);
 
-  // Time-based greeting
+  // Greeting
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good morning";
@@ -46,25 +42,25 @@ export default function DashboardPage() {
     return "Good evening";
   };
 
-  // Fetch folders after user is loaded
+  
   useEffect(() => {
-    if (!user) return;
+  if (!user) return;
 
-    const fetchFolders = async () => {
-      try {
-        const res = await api.get("/folders/");
-        setFolders(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchDashboard = async () => {
+    setLoadingFolders(true);
+    try {
+      const res = await api.get("/auth/dashboard/");
+      setFolders(res.data.folders || []);
+    } catch (err) {
+      console.error("Error fetching dashboard:", err);
+    } finally {
+      setLoadingFolders(false);
+    }
+  };
 
-    fetchFolders();
+  fetchDashboard();
+}, [user]);
 
-   
-  }, [user, router]);
 
   const totalFolders = folders.length;
   const totalFiles = useMemo(
@@ -75,14 +71,13 @@ export default function DashboardPage() {
   const lastActivity = useMemo(() => {
     if (folders.length === 0) return "No activity yet";
     const sorted = [...folders].sort(
-      (a, b) =>
-        new Date(b.last_updated).getTime() -
-        new Date(a.last_updated).getTime()
+      (a, b) => new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime()
     );
     return new Date(sorted[0].last_updated).toLocaleString();
   }, [folders]);
 
-  if (loading || loadingUser) {
+  // Show loading spinner while auth or folders are loading
+  if (loadingUser || loadingFolders) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-white"></div>
@@ -92,10 +87,12 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar foldersCount={folders.length} />
+      <Sidebar foldersCount={totalFolders} />
 
       <main className="flex-1 p-6">
-        <h1 className="text-2xl font-bold mb-2">{`${getGreeting()}, ${user?.first_name || "User"}!`}</h1>
+        <h1 className="text-2xl font-bold mb-2">
+          {`${getGreeting()}, ${user?.name || "User"}!`}
+        </h1>
         <p className="text-gray-600 mb-6">Here’s your dashboard overview.</p>
 
         {/* Summary Cards */}
@@ -126,13 +123,9 @@ export default function DashboardPage() {
             transition={{ delay: 0.1 }}
           >
             <h3 className="text-gray-500">Subscription</h3>
-            <p
-              className={`text-2xl font-bold mt-2 ${
-                user?.is_subscribed ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {user?.is_subscribed ? "Active" : "Expired"}
-            </p>
+           <p className={`text-2xl font-bold mt-2 ${user?.is_premium ? "text-green-600" : "text-red-600"}`}>
+  {user?.is_premium ? "Active" : "Expired"}
+          </p>
           </motion.div>
 
           <motion.div
@@ -146,7 +139,7 @@ export default function DashboardPage() {
           </motion.div>
         </div>
 
-        {/* + Create Folder button */}
+        {/* Create Folder */}
         <div className="mb-4">
           <button
             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -165,37 +158,23 @@ export default function DashboardPage() {
               animate={{ opacity: 1, y: 0 }}
               className="border p-4 rounded hover:shadow cursor-pointer flex items-center justify-between"
             >
-              <Link
-                href={`/folders/${folder.slug}`}
-                className="flex items-center gap-3"
-              >
+              <Link href={`/folders/${folder.slug}`} className="flex items-center gap-3">
                 <Folder className="text-black" size={24} />
                 <div>
                   <p className="font-semibold">{folder.title}</p>
-                  <p className="text-sm text-gray-500">
-                    {folder.files_count} files
-                  </p>
+                  <p className="text-sm text-gray-500">{folder.files_count} files</p>
                 </div>
               </Link>
 
               {/* Actions */}
               <div className="flex gap-2">
-                <button
-                  onClick={() => setRenameModalOpen(folder)}
-                  className="text-sm text-blue-600 hover:underline"
-                >
+                <button onClick={() => setRenameModalOpen(folder)} className="text-sm text-blue-600 hover:underline">
                   Rename
                 </button>
-                <button
-                  onClick={() => setDeleteModalOpen(folder)}
-                  className="text-sm text-red-600 hover:underline"
-                >
+                <button onClick={() => setDeleteModalOpen(folder)} className="text-sm text-red-600 hover:underline">
                   Delete
                 </button>
-                <button
-                  onClick={() => setUploadModalOpen(folder)}
-                  className="text-sm text-green-600 hover:underline"
-                >
+                <button onClick={() => setUploadModalOpen(folder)} className="text-sm text-green-600 hover:underline">
                   Upload PDF
                 </button>
               </div>
@@ -211,7 +190,7 @@ export default function DashboardPage() {
             parentId={null}
             onCreate={async ({ name, parentId }) => {
               try {
-                const res = await api.post("/folders/", { name, parentId });
+                const res = await api.post("/auth/folders/", { name, parentId });
                 setFolders((prev) => [res.data, ...prev]);
                 setCreateModalOpen(false);
               } catch (err) {
@@ -227,15 +206,8 @@ export default function DashboardPage() {
             onClose={() => setRenameModalOpen(null)}
             onRename={async (updatedPayload) => {
               try {
-                const updated = await api.put(
-                  `/folders/${renameModalOpen?.id}/`,
-                  updatedPayload
-                );
-                setFolders((prev) =>
-                  prev.map((f) =>
-                    f.id === updated.data.id ? updated.data : f
-                  )
-                );
+                const updated = await api.put(`/auth/folders/${renameModalOpen?.id}/`, updatedPayload);
+                setFolders((prev) => prev.map((f) => f.id === updated.data.id ? updated.data : f));
                 setRenameModalOpen(null);
               } catch (err) {
                 console.error(err);
@@ -250,7 +222,7 @@ export default function DashboardPage() {
             onClose={() => setDeleteModalOpen(null)}
             onDelete={async (id) => {
               try {
-                await api.delete(`/folders/${id}/`);
+                await api.delete(`/auth/folders/${id}/`);
                 setFolders((prev) => prev.filter((f) => f.id !== id));
                 setDeleteModalOpen(null);
               } catch (err) {
@@ -266,11 +238,7 @@ export default function DashboardPage() {
             onClose={() => setUploadModalOpen(null)}
             onPDFUploaded={(folderId, pdf) => {
               setFolders((prev) =>
-                prev.map((f) =>
-                  f.id === folderId
-                    ? { ...f, files_count: f.files_count + 1 }
-                    : f
-                )
+                prev.map((f) => f.id === folderId ? { ...f, files_count: f.files_count + 1 } : f)
               );
               setUploadModalOpen(null);
             }}

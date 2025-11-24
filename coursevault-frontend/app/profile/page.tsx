@@ -7,7 +7,7 @@ export default function ProfilePage() {
 
   return (
     <div className="flex bg-white min-h-screen">
-      <Sidebar />
+     <Sidebar foldersCount={1} activePage="folders" />
       <main className="flex-1 p-6">
         <h1 className="text-2xl font-bold mb-6">Profile</h1>
 

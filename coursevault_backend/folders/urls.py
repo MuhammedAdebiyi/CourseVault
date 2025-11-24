@@ -12,4 +12,5 @@ urlpatterns = [
     path('pdfs/<int:pdf_id>/delete/', PDFDeleteView.as_view(), name='pdf-delete'),
     path('', include(router.urls)),
     path("folders/<slug:slug>/public/", PublicFolderView.as_view(), name="public-folder"),
+    
 ]

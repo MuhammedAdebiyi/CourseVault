@@ -2,56 +2,63 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useAuth } from "@/src/context/AuthContext";
-import { HiOutlineMenu, HiX } from "react-icons/hi";
+import { List } from "react-bootstrap-icons";
 
 interface SidebarProps {
-  foldersCount?: number; // Add this
+  foldersCount: number;
+  activePage?: string;
 }
 
-export default function Sidebar({ foldersCount }: SidebarProps) {
-  const { user, logout } = useAuth();
-  const [open, setOpen] = useState(false);
+export default function Sidebar({ foldersCount, activePage }: SidebarProps) {
+  const [isOpen, setIsOpen] = useState(false);
 
-  if (!user) return null;
+  const toggleSidebar = () => setIsOpen(!isOpen);
+
+  const menuItems = [
+    { label: "Dashboard", slug: "dashboard", href: "/dashboard" },
+    { label: "Profile", slug: "profile", href: "/profile" },
+    { label: "Folders", slug: "folders", href: "/folders" },
+  ];
 
   return (
     <>
-      {/* Mobile hamburger */}
-      <div className="md:hidden flex justify-between items-center p-4 bg-white shadow">
-        <span className="font-bold text-xl">CourseVault</span>
-        <button onClick={() => setOpen(!open)}>
-          {open ? <HiX size={24} /> : <HiOutlineMenu size={24} />}
+      {/* Mobile Hamburger */}
+      <div className="sm:hidden p-4 flex justify-between items-center bg-white shadow">
+        <h2 className="font-bold">CourseVault</h2>
+        <button onClick={toggleSidebar}>
+          <List size={28} />
         </button>
       </div>
 
       {/* Sidebar */}
       <aside
-        className={`bg-gray-100 dark:bg-gray-900 md:block fixed md:relative top-0 left-0 h-full w-64 p-6 transition-transform transform ${
-          open ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-        }`}
+        className={`bg-white w-64 p-4 border-r sm:block fixed sm:static h-full overflow-auto transform ${
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        } transition-transform duration-300 ease-in-out z-50`}
       >
-        <nav className="flex flex-col gap-4">
-          <Link href="/dashboard" className="hover:underline">
-            Dashboard {foldersCount !== undefined ? `(${foldersCount})` : ""}
-          </Link>
-          <Link href="/profile" className="hover:underline">
-            Profile
-          </Link>
-          <button
-            onClick={logout}
-            className="px-3 py-1 mt-4 bg-black text-white rounded hover:bg-gray-800"
-          >
-            Logout
-          </button>
-        </nav>
+        <h2 className="text-xl font-bold mb-6 hidden sm:block">CourseVault</h2>
+        <ul className="space-y-2">
+          {menuItems.map((item) => (
+            <li
+              key={item.slug}
+              className={`p-2 rounded hover:bg-blue-100 ${
+                activePage === item.slug ? "bg-blue-500 text-white" : ""
+              }`}
+            >
+              <Link href={item.href}>{item.label}</Link>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-auto text-gray-500 text-sm hidden sm:block">
+          © 2025 CourseVault
+        </p>
       </aside>
 
-      {/* Overlay for mobile */}
-      {open && (
+      {/* Overlay for mobile when sidebar is open */}
+      {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-10 md:hidden"
-          onClick={() => setOpen(false)}
+          className="fixed inset-0 bg-black bg-opacity-30 z-40 sm:hidden"
+          onClick={toggleSidebar}
         />
       )}
     </>

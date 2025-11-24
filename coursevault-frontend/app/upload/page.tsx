@@ -16,7 +16,7 @@ export default function UploadPage() {
 
   return (
     <div className="flex bg-gray-50 min-h-screen">
-      <Sidebar />
+     <Sidebar foldersCount={0} activePage="upload" />
       <main className="flex-1 p-6">
         <h1 className="text-3xl font-bold mb-6">Upload File</h1>
         <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">

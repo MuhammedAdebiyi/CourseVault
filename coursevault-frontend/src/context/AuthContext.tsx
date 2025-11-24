@@ -4,33 +4,47 @@ import { createContext, useState, useEffect, useContext, ReactNode } from "react
 import api from "@/app/utils/api";
 import { useRouter } from "next/navigation";
 
+type User = {
+  id: string;
+  email: string;
+  name: string;
+  email_verified: boolean;
+  is_premium?: boolean;
+  created_at: string;
+  is_subscribed?: boolean;
+};
+
+type LoginResponse = {
+  success: boolean;
+  message?: string;
+  error?: string;
+  attempts_remaining?: number;
+};
+
 type AuthContextType = {
-  user: any;
-  setUser: (user: any) => void;
+  user: User | null;
   loadingUser: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, password: string) => Promise<LoginResponse>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const router = useRouter();
 
-  // Helper: check free trial
-  const checkSubscription = (user: any) => {
+  const checkSubscription = (user: User) => {
     if (!user) return false;
-
     const created = new Date(user.created_at);
     const now = new Date();
     const diffDays = Math.floor((now.getTime() - created.getTime()) / (1000 * 3600 * 24));
-
     return diffDays >= 30 && !user.is_subscribed;
   };
 
-  // Load user on page refresh
+  // Load user on mount
   useEffect(() => {
     const access = localStorage.getItem("access_token");
     if (!access) {
@@ -39,16 +53,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     api
-      .get("me/")
+      .get("/auth/me/")
       .then((res) => {
-        const userData = res.data;
-        setUser(userData);
-
-        if (checkSubscription(userData)) {
+        setUser(res.data);
+        if (checkSubscription(res.data)) {
           router.push("/pricing");
         }
       })
-      .catch(() => logout())
+      .catch((err) => {
+        console.error("Failed to load user:", err);
+        logout();
+      })
       .finally(() => setLoadingUser(false));
   }, []);
 
@@ -59,57 +74,105 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!refresh) return;
 
       api
-        .post("refresh/", { refresh })
+        .post("/auth/token/refresh/", { refresh })
         .then((res) => {
           localStorage.setItem("access_token", res.data.access);
         })
-        .catch(() => logout());
+        .catch(() => {
+          console.error("Token refresh failed");
+          logout();
+        });
     }, 1000 * 60 * 10);
 
     return () => clearInterval(interval);
   }, []);
 
-  // Login
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<LoginResponse> => {
     setLoadingUser(true);
+    
     try {
-      const res = await api.post("login/", { email, password });
-
+      // Call the token endpoint
+      const res = await api.post("/auth/token/", { email, password });
+      
+      // Store tokens
       localStorage.setItem("access_token", res.data.access);
       localStorage.setItem("refresh_token", res.data.refresh);
 
-      const me = await api.get("me/");
-      setUser(me.data);
+      // Fetch user data
+      const userRes = await api.get("/auth/me/");
+      setUser(userRes.data);
 
-      // Redirect based on free trial
-      if (checkSubscription(me.data)) {
+      // Check subscription and redirect
+      if (checkSubscription(userRes.data)) {
         router.push("/pricing");
       } else {
         router.push("/dashboard");
       }
 
       return { success: true };
+      
     } catch (error: any) {
-      console.error("Login error:", error.response?.data || error.message);
-      return {
-        success: false,
-        message: error.response?.data?.detail || "Invalid email or password",
+      console.error("Login error:", error);
+      
+      // Extract error details from response
+      const errorData = error.response?.data;
+      const statusCode = error.response?.status;
+      
+      let message = "Something went wrong. Please try again.";
+      let errorType = "unknown";
+      let attemptsRemaining = undefined;
+      
+      if (errorData) {
+        // Handle different error formats
+        message = errorData.detail || errorData.error || errorData.message || message;
+        errorType = errorData.error || "error";
+        attemptsRemaining = errorData.attempts_remaining;
+      }
+      
+      // Handle specific status codes
+      if (statusCode === 429) {
+        message = errorData?.detail || "Too many login attempts. Please try again later.";
+        errorType = "rate_limited";
+      } else if (statusCode === 400 || statusCode === 401) {
+        // Invalid credentials
+        if (!errorData?.detail) {
+          message = "Invalid email or password";
+        }
+      } else if (statusCode === 500) {
+        message = "Server error. Please try again later.";
+        errorType = "server_error";
+      }
+      
+      return { 
+        success: false, 
+        message,
+        error: errorType,
+        attempts_remaining: attemptsRemaining
       };
+      
     } finally {
       setLoadingUser(false);
     }
   };
 
-  // Logout
   const logout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     setUser(null);
-    router.push("/login");
+    router.push("/auth/login");
+  };
+
+  const refreshUser = async () => {
+    try {
+      const res = await api.get("/auth/me/");
+      setUser(res.data);
+    } catch (error) {
+      console.error("Failed to refresh user:", error);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loadingUser, login, logout }}>
+    <AuthContext.Provider value={{ user, loadingUser, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

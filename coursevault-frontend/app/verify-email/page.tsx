@@ -10,13 +10,13 @@ export default function VerifyCodePage() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
 
-  const { setUser } = useAuth();
+  const { login } = useAuth();
 
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Resend
+  // Resend code
   const [timer, setTimer] = useState(30);
   const [resending, setResending] = useState(false);
 
@@ -25,10 +25,11 @@ export default function VerifyCodePage() {
   // Countdown timer
   useEffect(() => {
     if (timer <= 0) return;
-    const interval = setInterval(() => setTimer(t => t - 1), 1000);
+    const interval = setInterval(() => setTimer((t) => t - 1), 1000);
     return () => clearInterval(interval);
   }, [timer]);
 
+  // Handle input change
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
     const val = e.target.value.replace(/\D/g, "");
     if (val.length > 1) return;
@@ -66,14 +67,16 @@ export default function VerifyCodePage() {
     setError("");
 
     try {
-      const res = await api.post("/verify-email/", { email, code });
+      // Verify code
+      await api.post("/verify-email/", { email, code });
 
-      // Save tokens
+      // Login the user automatically after verification
+      // Assuming backend uses the same password or issues a token
+      // If password unknown, backend should return access/refresh token in /verify-email
+      // We'll assume backend returns tokens directly:
+      const res = await api.post("/verify-email/", { email, code });
       localStorage.setItem("access_token", res.data.access);
       localStorage.setItem("refresh_token", res.data.refresh);
-
-      // Store user in context
-      setUser(res.data.user);
 
       // Navigate to dashboard
       router.push("/dashboard");
@@ -113,7 +116,7 @@ export default function VerifyCodePage() {
               type="text"
               inputMode="numeric"
               maxLength={1}
-              ref={(el: HTMLInputElement | null) => { inputsRef.current[idx] = el; }}
+              ref={(el) => { inputsRef.current[idx] = el; }}
               value={code[idx] || ""}
               onChange={(e) => handleChange(e, idx)}
               onKeyDown={(e) => handleKeyDown(e, idx)}

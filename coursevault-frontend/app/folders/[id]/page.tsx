@@ -24,7 +24,7 @@ export interface File {
 
 export interface Folder {
   id: number;
-  name: string; // ✅ matches modal now
+  name: string; 
   children?: Folder[];
   files?: File[];
 }
@@ -32,7 +32,7 @@ export interface Folder {
 // -----------------
 export default function FolderDetail() {
   const params = useParams();
-  const id = Array.isArray(params.id) ? params.id[0] : params.id; // ensure string
+  const id = Array.isArray(params.id) ? params.id[0] : params.id; 
   const [loading, setLoading] = useState(true);
   const [folder, setFolder] = useState<Folder | null>(null);
 
@@ -64,7 +64,7 @@ export default function FolderDetail() {
   // Create subfolder
   const handleCreate = async (payload: { name: string; parentId?: string | number | null | undefined }) => {
   try {
-    const { data } = await api.post<Folder>("/folders/", { ...payload, parentId: id ?? undefined });
+    const { data } = await api.post<Folder>("/auth/folders/", { ...payload, parentId: id ?? undefined });
     setFolder(prev => prev ? { ...prev, children: [data, ...(prev.children ?? [])] } : prev);
     setCreateOpen(false);
   } catch (err) {
@@ -100,7 +100,7 @@ export default function FolderDetail() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
+    <Sidebar foldersCount={0} activePage="folders" />
       <main className="flex-1 p-6">
         <Breadcrumbs crumbs={[{ label: "Folders", href: "/folders" }, { label: folder.name }]} />
 
@@ -170,7 +170,7 @@ export default function FolderDetail() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreate={handleCreate}
-        parentId={id ?? undefined} // ✅ type-safe
+        parentId={id ?? undefined} 
       />
       <ConfirmDialog
         open={confirmOpen}

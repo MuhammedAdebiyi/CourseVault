@@ -15,6 +15,15 @@ from rest_framework.permissions import IsAuthenticated
 import boto3
 from django.conf import settings
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from django.core.cache import cache
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from .serializers import CustomTokenObtainPairSerializer
+import logging
 from .models import CustomUser, EmailVerificationCode
 from folders.models import PDF, Folder
 from django.utils.decorators import method_decorator
@@ -56,8 +65,15 @@ class CustomerDashboardView(APIView):
             for f in folders
         ]
 
-        # Fetch some stats
+        # Fetch stats
         total_pdfs = PDF.objects.filter(folder__owner=user).count()
+        total_folders = folders.count()
+
+        # Subscription info
+        subscription_status = "Expired"
+        if getattr(user, "subscription_expires_at", None):
+            if user.subscription_expires_at > timezone.now():
+                subscription_status = "Active"
 
         return Response({
             "user": {
@@ -70,8 +86,9 @@ class CustomerDashboardView(APIView):
             "folders": folder_data,
             "stats": {
                 "pdf_count": total_pdfs,
-                "folder_count": folders.count(),
-            }
+                "folder_count": total_folders,
+            },
+            "subscription": subscription_status
         })
 
 
@@ -142,34 +159,61 @@ class VerifyEmailView(generics.GenericAPIView):
 
 @method_decorator(csrf_exempt, name="dispatch")
 class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Custom login view with rate limiting and better error messages
+    """
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        email = request.data.get("email")
+        email = request.data.get("email", "")
         cache_key = f"login_attempts_{email}"
         attempts = cache.get(cache_key, 0)
 
+        # Check if user is locked out
         if attempts >= MAX_LOGIN_ATTEMPTS:
+            logger.warning(f"Account locked: {email} at {timezone.now()}")
             return Response(
-                {"detail": f"Too many login attempts. Try again in {LOCKOUT_TIME // 60} minutes."},
+                {
+                    "detail": f"Too many login attempts. Try again in {LOCKOUT_TIME // 60} minutes.",
+                    "error": "account_locked"
+                },
                 status=status.HTTP_429_TOO_MANY_REQUESTS
             )
 
-        response = super().post(request, *args, **kwargs)
-
-        if response.status_code != 200:
-            cache.set(cache_key, attempts + 1, LOCKOUT_TIME)
-            logger.warning(f"Failed login attempt for {email} at {timezone.now()}")
-        else:
+        # Try to authenticate
+        try:
+            response = super().post(request, *args, **kwargs)
+            
+            # Successful login - clear attempts
             cache.delete(cache_key)
             logger.info(f"User logged in: {email} at {timezone.now()}")
-
-        return response
-
+            
+            return response
+            
+        except Exception as e:
+            # Failed login - increment attempts
+            cache.set(cache_key, attempts + 1, LOCKOUT_TIME)
+            remaining_attempts = MAX_LOGIN_ATTEMPTS - (attempts + 1)
+            
+            logger.warning(f"Failed login attempt for {email} at {timezone.now()}")
+            
+            # Return consistent error format
+            error_message = "Invalid email or password"
+            if remaining_attempts > 0 and remaining_attempts <= 2:
+                error_message = f"Invalid email or password. {remaining_attempts} attempts remaining."
+            
+            return Response(
+                {
+                    "detail": error_message,
+                    "error": "invalid_credentials",
+                    "attempts_remaining": max(0, remaining_attempts)
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 @method_decorator(csrf_exempt, name="dispatch")
-class ResendCodeView(APIView):
+class ResendCodeView(APIView):  
     permission_classes = [AllowAny]
 
     def post(self, request):

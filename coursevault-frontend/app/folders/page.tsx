@@ -26,7 +26,7 @@ export default function FoldersPage() {
   useEffect(() => {
     async function fetchFolders() {
       try {
-        const res = await api.get<Folder[]>("/folders/");
+        const res = await api.get<Folder[]>("/auth/folders/");
         setFolders(res.data);
       } catch (err) {
         console.error(err);
@@ -40,7 +40,7 @@ export default function FoldersPage() {
   // Create new folder
   const handleCreate = async (payload: { name: string; parentId?: string | number | null }) => {
     try {
-      const { data } = await api.post<Folder>("/folders/", payload);
+      const { data } = await api.post<Folder>("/auth/folders/", payload);
       setFolders(prev => [data, ...prev]);
       setCreateOpen(false);
     } catch (err) {
@@ -50,7 +50,7 @@ export default function FoldersPage() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
+      <Sidebar foldersCount={1} activePage="folders" />
       <main className="flex-1 p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Folders</h1>

@@ -52,22 +52,22 @@ class CustomerDashboardView(APIView):
     def get(self, request):
         user = request.user
 
-        # Fetch folders
-        folders = Folder.objects.filter(owner=user)
+        # Fetch folders (only root folders - no parent)
+        folders = Folder.objects.filter(owner=user, parent__isnull=True)
         folder_data = [
             {
                 "id": f.id,
                 "title": f.title,
                 "slug": f.slug,
-                "files_count": f.pdf_set.count(),
-                "last_updated": f.updated_at.isoformat(),
+                "files_count": f.pdfs.count(),  # FIXED: Changed from pdf_set to pdfs
+                "last_updated": f.updated_at.isoformat() if hasattr(f, 'updated_at') else None,
             }
             for f in folders
         ]
 
         # Fetch stats
         total_pdfs = PDF.objects.filter(folder__owner=user).count()
-        total_folders = folders.count()
+        total_folders = Folder.objects.filter(owner=user).count()
 
         # Subscription info
         subscription_status = "Expired"
@@ -90,7 +90,6 @@ class CustomerDashboardView(APIView):
             },
             "subscription": subscription_status
         })
-
 
 
 class RegisterView(generics.CreateAPIView):

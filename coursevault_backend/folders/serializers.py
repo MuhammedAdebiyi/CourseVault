@@ -41,33 +41,45 @@ def generate_presigned_url(file_name, expires_in=3600):
 
 
 # PDF Serializer
-class PDFSerializer(serializers.ModelSerializer):
-    download_url = serializers.SerializerMethodField(read_only=True)
+from rest_framework import serializers
+from .models import Folder, PDF
 
+
+class PDFSerializer(serializers.ModelSerializer):
     class Meta:
         model = PDF
-        fields = ["id", "title", "file", "uploaded_at", "download_url", "folder"]
-
-    def get_download_url(self, obj):
-        request = self.context.get("request")
-        if obj.folder.is_public or (request and request.user == obj.folder.owner):
-            return generate_presigned_url(obj.file.name)
-        return None
-
-    def validate_file(self, value):
-        if not value.name.endswith(".pdf"):
-            raise serializers.ValidationError("Only PDF files are allowed")
-        return value
+        fields = ['id', 'title', 'file', 'uploaded_at']
+        read_only_fields = ['id', 'uploaded_at']
 
 
-# Folder Serializer
 class FolderSerializer(serializers.ModelSerializer):
-    pdfs = PDFSerializer(many=True, read_only=True)
-    owner_username = serializers.CharField(source="owner.email", read_only=True)
-    parent = serializers.PrimaryKeyRelatedField(
-        queryset=Folder.objects.all(), required=False, allow_null=True
-    )
-
+    children = serializers.SerializerMethodField()
+    files = serializers.SerializerMethodField()
+    name = serializers.CharField(source='title')  
+    
     class Meta:
         model = Folder
-        fields = ["id", "title", "slug", "owner_username", "is_public", "pdfs", "parent"]
+        fields = ['id', 'title', 'name', 'slug', 'is_public', 'parent', 'children', 'files']
+        read_only_fields = ['id', 'slug']
+    
+    def get_children(self, obj):
+        children = obj.children.all()
+        return FolderSerializer(children, many=True, context=self.context).data
+    
+    def get_files(self, obj):
+        files = obj.pdfs.all().order_by('-uploaded_at')
+        return PDFSerializer(files, many=True).data
+
+
+class FolderListSerializer(serializers.ModelSerializer):
+    """Simpler serializer for listing folders without children/files"""
+    name = serializers.CharField(source='title')
+    files_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Folder
+        fields = ['id', 'title', 'name', 'slug', 'is_public', 'parent', 'files_count']
+        read_only_fields = ['id', 'slug']
+    
+    def get_files_count(self, obj):
+        return obj.pdfs.count()

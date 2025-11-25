@@ -1,30 +1,53 @@
 "use client";
-import { useState, useRef } from "react";
 
-export default function UploadFile({ onUploaded, folderId }: any) {
-  const [drag, setDrag] = useState(false);
-  const inputRef = useRef<HTMLInputElement|null>(null);
+import React, { useState } from "react";
+import api from "@/app/utils/api";
+import { File } from "@/app/folders/[id]/page";
 
-  const upload = async (file: File) => {
-    // placeholder - replace with your api util
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("folder", String(folderId));
-    // await fetch("/api/files/upload", { method: "POST", body: fd });
-    onUploaded && onUploaded({ title: file.name, uploaded_at: new Date().toISOString(), file: URL.createObjectURL(file) });
+interface UploadFileProps {
+  folderId: number;
+  onUploaded: (file: File) => void;
+}
+
+export default function UploadFile({ folderId, onUploaded }: UploadFileProps) {
+  const [uploading, setUploading] = useState(false);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      alert("Only PDF files are allowed");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("folder", folderId.toString());
+
+    try {
+      setUploading(true);
+      const { data } = await api.post<File>("/folders/pdfs/", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      onUploaded(data);
+    } catch (err) {
+      console.error("Failed to upload file:", err);
+      alert("Failed to upload file");
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
     <div>
-      <div
-        onDragOver={(e)=>{e.preventDefault(); setDrag(true)}}
-        onDragLeave={()=>setDrag(false)}
-        onDrop={(e)=>{e.preventDefault(); setDrag(false); const f = e.dataTransfer?.files?.[0]; if(f) upload(f);}}
-        className={`p-6 border-2 border-dashed rounded ${drag ? "border-blue-400 bg-blue-50" : "border-gray-200"}`}
-      >
-        <input ref={inputRef} type="file" className="hidden" onChange={(e)=>{ const f = e.target.files?.[0]; if(f) upload(f); }} />
-        <p className="text-center">Drag & drop PDF here or <button onClick={()=>inputRef.current?.click()} className="underline">browse</button></p>
-      </div>
+      <input
+        type="file"
+        accept="application/pdf"
+        onChange={handleFileChange}
+        disabled={uploading}
+      />
+      {uploading && <p className="text-sm text-gray-500 mt-1">Uploading...</p>}
     </div>
   );
 }

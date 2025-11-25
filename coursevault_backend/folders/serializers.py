@@ -64,7 +64,10 @@ class PDFSerializer(serializers.ModelSerializer):
 class FolderSerializer(serializers.ModelSerializer):
     pdfs = PDFSerializer(many=True, read_only=True)
     owner_username = serializers.CharField(source="owner.email", read_only=True)
+    parent = serializers.PrimaryKeyRelatedField(
+        queryset=Folder.objects.all(), required=False, allow_null=True
+    )
 
     class Meta:
         model = Folder
-        fields = ["id", "title", "slug", "owner_username", "is_public", "pdfs"]
+        fields = ["id", "title", "slug", "owner_username", "is_public", "pdfs", "parent"]

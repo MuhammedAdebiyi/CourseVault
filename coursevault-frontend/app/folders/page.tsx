@@ -11,7 +11,8 @@ import { motion } from "framer-motion";
 // ----- Types -----
 export interface Folder {
   id: number;
-  name: string;  // <-- must match modal payload
+  name: string;
+  parentId?: number | null;
   children?: Folder[];
   files?: any[];
 }
@@ -26,10 +27,12 @@ export default function FoldersPage() {
   useEffect(() => {
     async function fetchFolders() {
       try {
-        const res = await api.get<Folder[]>("/auth/folders/");
-        setFolders(res.data);
+        const res = await api.get("/folders/"); 
+        const foldersData = Array.isArray(res.data) ? res.data : res.data.results || [];
+        setFolders(foldersData);
       } catch (err) {
-        console.error(err);
+        console.error("Failed to fetch folders:", err);
+        setFolders([]);
       } finally {
         setLoading(false);
       }
@@ -38,19 +41,23 @@ export default function FoldersPage() {
   }, []);
 
   // Create new folder
-  const handleCreate = async (payload: { name: string; parentId?: string | number | null }) => {
+  const handleCreate = async (payload: { name: string; parentId?: number | null }) => {
     try {
-      const { data } = await api.post<Folder>("/auth/folders/", payload);
-      setFolders(prev => [data, ...prev]);
+      const body = {
+        title: payload.name, 
+        parent: payload.parentId ?? null, 
+      };
+      const { data } = await api.post("/folders/", body);
+      setFolders(prev => [data, ...prev]); 
       setCreateOpen(false);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to create folder:", err);
     }
   };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar foldersCount={1} activePage="folders" />
+      <Sidebar foldersCount={folders.length} activePage="folders" />
       <main className="flex-1 p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Folders</h1>
@@ -89,5 +96,5 @@ export default function FoldersPage() {
         parentId={null} // root folder
       />
     </div>
-  );
+  );  
 }

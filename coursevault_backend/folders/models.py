@@ -8,6 +8,13 @@ class Folder(models.Model):
     slug = models.SlugField(unique=True, blank=True)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     is_public = models.BooleanField(default=False)
+    parent = models.ForeignKey(
+        "self",
+        related_name="children",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -16,6 +23,7 @@ class Folder(models.Model):
 
     def __str__(self):
         return self.title
+
 
 
 class PDF(models.Model):

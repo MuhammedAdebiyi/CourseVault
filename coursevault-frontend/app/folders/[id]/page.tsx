@@ -24,7 +24,8 @@ export interface File {
 
 export interface Folder {
   id: number;
-  name: string; 
+  name: string;
+  parentId?: number | null;
   children?: Folder[];
   files?: File[];
 }
@@ -32,7 +33,7 @@ export interface Folder {
 // -----------------
 export default function FolderDetail() {
   const params = useParams();
-  const id = Array.isArray(params.id) ? params.id[0] : params.id; 
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const [loading, setLoading] = useState(true);
   const [folder, setFolder] = useState<Folder | null>(null);
 
@@ -50,7 +51,8 @@ export default function FolderDetail() {
         const res = await api.get<Folder>(`/folders/${id}/`);
         setFolder(res.data);
       } catch (err) {
-        console.error(err);
+        console.error("Failed to fetch folder:", err);
+        setFolder(null);
       } finally {
         setLoading(false);
       }
@@ -61,46 +63,53 @@ export default function FolderDetail() {
   if (loading) return <LoadingSpinner />;
   if (!folder) return <div className="p-4 text-red-500">Folder not found</div>;
 
+  // Destructure with defaults
+  const { children = [], files = [] } = folder;
+
   // Create subfolder
-  const handleCreate = async (payload: { name: string; parentId?: string | number | null | undefined }) => {
-  try {
-    const { data } = await api.post<Folder>("/auth/folders/", { ...payload, parentId: id ?? undefined });
-    setFolder(prev => prev ? { ...prev, children: [data, ...(prev.children ?? [])] } : prev);
-    setCreateOpen(false);
-  } catch (err) {
-    console.error(err);
-  }
-};
+  const handleCreate = async (payload: { name: string; parentId?: number | null }) => {
+    try {
+      const body = {
+        title: payload.name,  // backend expects "title"
+        parent: Number(id),   // parent folder is the current folder
+      };
+      const { data } = await api.post("/folders/", body);
+      setFolder(prev => prev ? { ...prev, children: [data, ...(prev.children ?? [])] } : prev);
+      setCreateOpen(false);
+    } catch (err) {
+      console.error("Failed to create subfolder:", err);
+    }
+  };
 
   // File uploaded
   const handleFileUploaded = (file: File) => {
-    setFolder(prev => prev ? { ...prev, files: [file, ...(prev.files ?? [])] } : prev);
+    setFolder(prev => prev ? { ...prev, files: [file, ...prev.files ?? []] } : prev);
   };
 
   // Delete file
   const handleDeleteFile = async (fileId: number) => {
     try {
-      await api.delete(`/pdfs/${fileId}/delete/`);
+      await api.delete(`/folders/pdfs/${fileId}/delete/`);
       setFolder(prev => prev ? { ...prev, files: prev.files?.filter(f => f.id !== fileId) } : prev);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to delete file:", err);
     }
   };
 
   // Move file
   const handleMoveFile = async (fileId: number, targetFolderId: number) => {
     try {
-      await api.post(`/files/${fileId}/move/`, { folder: targetFolderId });
+      await api.post(`/folders/pdfs/${fileId}/move/`, { folder: targetFolderId });
       setFolder(prev => prev ? { ...prev, files: prev.files?.filter(f => f.id !== fileId) } : prev);
       setMoveOpen(false);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to move file:", err);
     }
   };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-    <Sidebar foldersCount={0} activePage="folders" />
+      <Sidebar foldersCount={0} activePage="folders" />
       <main className="flex-1 p-6">
         <Breadcrumbs crumbs={[{ label: "Folders", href: "/folders" }, { label: folder.name }]} />
 
@@ -126,8 +135,8 @@ export default function FolderDetail() {
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3">Subfolders</h2>
           <motion.div layout className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {(folder.children ?? []).length > 0
-              ? folder.children!.map(c => (
+            {children.length > 0
+              ? children.map(c => (
                   <motion.div key={c.id} layout whileHover={{ scale: 1.03 }}>
                     <FolderCard folder={c} />
                   </motion.div>
@@ -140,16 +149,16 @@ export default function FolderDetail() {
         {/* Upload */}
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3">Upload file</h2>
-          <UploadFile onUploaded={handleFileUploaded} folderId={id} />
+          <UploadFile onUploaded={handleFileUploaded} folderId={Number(id)} />
         </section>
 
         {/* Files */}
         <section>
           <h2 className="text-lg font-semibold mb-3">Files</h2>
-          {(folder.files ?? []).length > 0
+          {files.length > 0
             ? (
               <motion.div layout className="bg-white rounded-xl shadow divide-y">
-                {folder.files!.map(file => (
+                {files.map(file => (
                   <motion.div key={file.id} layout whileHover={{ scale: 1.02 }}>
                     <FileItem
                       file={file}
@@ -170,7 +179,7 @@ export default function FolderDetail() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreate={handleCreate}
-        parentId={id ?? undefined} 
+        parentId={Number(id)}
       />
       <ConfirmDialog
         open={confirmOpen}
@@ -182,7 +191,7 @@ export default function FolderDetail() {
       <MoveFileModal
         open={moveOpen}
         onClose={() => setMoveOpen(false)}
-        folders={folder.children ?? []}
+        folders={children}
         onMove={(fid, fid2) => handleMoveFile(fid, Number(fid2))}
         fileId={selectedFileToMove ?? 0}
       />

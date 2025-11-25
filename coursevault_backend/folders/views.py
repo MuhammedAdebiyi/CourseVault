@@ -88,11 +88,11 @@ class FolderViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Only folders owned by the user
         return Folder.objects.filter(owner=self.request.user)
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
+
 
 class PDFViewSet(viewsets.ModelViewSet):
     serializer_class = PDFSerializer

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { Folder } from "react-bootstrap-icons";
-import Sidebar from "../components/SideBar";
 import Link from "next/link";
 import api from "../utils/api";
 import { motion } from "framer-motion";
@@ -42,7 +41,7 @@ export default function DashboardPage() {
     return "Good evening";
   };
 
-  
+  // Fetch folders after user is loaded
   useEffect(() => {
   if (!user) return;
 
@@ -50,6 +49,7 @@ export default function DashboardPage() {
     setLoadingFolders(true);
     try {
       const res = await api.get("/auth/dashboard/");
+      // res.data.folders contains all the folder info
       setFolders(res.data.folders || []);
     } catch (err) {
       console.error("Error fetching dashboard:", err);
@@ -86,8 +86,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar foldersCount={totalFolders} />
+  
 
       <main className="flex-1 p-6">
         <h1 className="text-2xl font-bold mb-2">
@@ -245,6 +244,6 @@ export default function DashboardPage() {
           />
         )}
       </main>
-    </div>
+  
   );
 }

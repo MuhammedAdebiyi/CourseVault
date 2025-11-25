@@ -21,19 +21,26 @@ export default function SignUpPage() {
   const [successDialog, setSuccessDialog] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError] = useState(""); // Error state
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(""); // Clear previous errors
 
     if (password !== confirmPassword) {
-      alert("Passwords do not match!");
+      setError("Passwords do not match!");
+      return;
+    }
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long");
       return;
     }
 
     setLoading(true);
 
     try {
-      await api.post("/register/", { name, email, password });
+      await api.post("/auth/register/", { name, email, password }); // FIXED: Added /auth/
 
       // Show success dialog
       setSuccessDialog(true);
@@ -47,7 +54,14 @@ export default function SignUpPage() {
     } catch (err: any) {
       setLoading(false);
       console.error("Registration error:", err.response?.data || err.message);
-      alert(err.response?.data?.detail || "Registration failed");
+      
+      // Extract error message
+      const errorMessage = err.response?.data?.detail || 
+                          err.response?.data?.error || 
+                          err.response?.data?.message ||
+                          "Registration failed. Please try again.";
+      
+      setError(errorMessage);
     }
   };
 
@@ -76,6 +90,13 @@ export default function SignUpPage() {
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative">
+              <span className="block sm:inline">{error}</span>
+            </div>
+          )}
+
           {/* Name */}
           <div>
             <label className="block text-black mb-1">Full Name</label>
@@ -114,7 +135,7 @@ export default function SignUpPage() {
               required
             />
             <span
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer text-gray-600"
+              className="absolute right-3 top-[38px] cursor-pointer text-gray-600"
               onClick={() => setShowPassword(!showPassword)}
             >
               {showPassword ? (
@@ -137,7 +158,7 @@ export default function SignUpPage() {
               required
             />
             <span
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer text-gray-600"
+              className="absolute right-3 top-[38px] cursor-pointer text-gray-600"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
             >
               {showConfirmPassword ? (

@@ -67,21 +67,18 @@ export default function VerifyCodePage() {
     setError("");
 
     try {
-      // Verify code
-      await api.post("/verify-email/", { email, code });
-
-      // Login the user automatically after verification
-      // Assuming backend uses the same password or issues a token
-      // If password unknown, backend should return access/refresh token in /verify-email
-      // We'll assume backend returns tokens directly:
-      const res = await api.post("/verify-email/", { email, code });
+      // Verify code - FIXED: Only call once with correct path
+      const res = await api.post("/auth/verify-email/", { email, code });
+      
+      // Store tokens returned from backend
       localStorage.setItem("access_token", res.data.access);
       localStorage.setItem("refresh_token", res.data.refresh);
 
       // Navigate to dashboard
       router.push("/dashboard");
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Invalid code. Please try again.");
+      console.error("Verification error:", err);
+      setError(err?.response?.data?.detail || err?.response?.data?.error || "Invalid code. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -95,10 +92,11 @@ export default function VerifyCodePage() {
     setError("");
 
     try {
-      await api.post("/resend-code/", { email });
+      await api.post("/auth/resend-code/", { email }); // FIXED: Added /auth/
       setTimer(30);
-    } catch (err) {
-      setError("Could not resend the code. Try again later.");
+    } catch (err: any) {
+      console.error("Resend error:", err);
+      setError(err?.response?.data?.detail || "Could not resend the code. Try again later.");
     } finally {
       setResending(false);
     }
@@ -107,6 +105,9 @@ export default function VerifyCodePage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6">
       <h1 className="text-2xl font-bold mb-6">Enter Verification Code</h1>
+      <p className="text-gray-600 mb-4 text-center">
+        We've sent a 6-digit code to <span className="font-semibold">{email}</span>
+      </p>
 
       <form onSubmit={handleSubmit} className="flex flex-col items-center gap-4">
         <div className="flex gap-2">
@@ -120,17 +121,22 @@ export default function VerifyCodePage() {
               value={code[idx] || ""}
               onChange={(e) => handleChange(e, idx)}
               onKeyDown={(e) => handleKeyDown(e, idx)}
-              className="w-12 h-12 text-center border rounded text-lg focus:outline-none focus:ring"
+              className="w-12 h-12 text-center border border-gray-300 rounded text-lg focus:outline-none focus:ring-2 focus:ring-black"
+              disabled={loading}
             />
           ))}
         </div>
 
-        {error && <p className="text-red-500 mt-2">{error}</p>}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded mt-2">
+            {error}
+          </div>
+        )}
 
         <button
           type="submit"
           disabled={loading}
-          className="mt-4 px-6 py-2 bg-black text-white rounded disabled:opacity-50"
+          className="mt-4 px-6 py-2 bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
         >
           {loading ? "Verifying..." : "Verify"}
         </button>
@@ -138,12 +144,12 @@ export default function VerifyCodePage() {
         <div className="mt-4 text-center">
           {timer > 0 ? (
             <p className="text-gray-500">
-              Didn’t get the code? <span className="font-semibold">{timer}s</span>
+              Didn't get the code? Resend in <span className="font-semibold">{timer}s</span>
             </p>
           ) : (
             <button
               type="button"
-              className="text-blue-600 font-semibold disabled:opacity-50"
+              className="text-blue-600 font-semibold disabled:opacity-50 hover:underline"
               disabled={resending}
               onClick={handleResend}
             >

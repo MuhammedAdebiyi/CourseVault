@@ -2,7 +2,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.db import models
 import uuid
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta, date
 from secrets import randbelow
 
 class CustomUserManager(BaseUserManager):
@@ -20,17 +20,19 @@ class CustomUserManager(BaseUserManager):
         extra_fields.setdefault("is_superuser", True)
         return self.create_user(email, password, **extra_fields)
 
+
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=100)
     email_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    subscription_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
-
-
+    
+    # Subscription fields
     subscription_active = models.BooleanField(default=False)
-    subscription_due_date = models.DateField(null=True, blank=True)
+    subscription_due_date = models.DateField(null=True, blank=True)  # When subscription expires
+    created_at = models.DateTimeField(auto_now_add=True)  # Account creation date
+    
     objects = CustomUserManager()
 
     USERNAME_FIELD = "email"
@@ -38,6 +40,45 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+    
+    @property
+    def is_premium(self):
+        """
+        Check if user has active subscription or is within free trial period
+        """
+        # If subscription is explicitly active and not expired
+        if self.subscription_active and self.subscription_due_date:
+            return self.subscription_due_date >= date.today()
+        
+        # Check if within 30-day free trial (from registration)
+        if self.created_at:
+            trial_end = self.created_at.date() + timedelta(days=30)
+            return date.today() <= trial_end
+        
+        return False
+    
+    @property
+    def trial_days_remaining(self):
+        """
+        Calculate remaining trial days
+        """
+        if self.subscription_active:
+            return None  # No trial if subscribed
+        
+        if self.created_at:
+            trial_end = self.created_at.date() + timedelta(days=30)
+            remaining = (trial_end - date.today()).days
+            return max(0, remaining)
+        
+        return 0
+    
+    @property
+    def needs_payment(self):
+        """
+        Check if user needs to make payment (trial expired and no subscription)
+        """
+        return not self.is_premium
+
 
 class EmailVerificationCode(models.Model):
     user = models.ForeignKey("accounts.CustomUser", on_delete=models.CASCADE, related_name="verifications")
@@ -65,4 +106,3 @@ class EmailVerificationCode(models.Model):
             code=code,
             expires_at=timezone.now() + timedelta(minutes=ttl_minutes)
         )
-

@@ -296,7 +296,11 @@ class UserProfileView(APIView):
             "id": user.id,
             "email": user.email,
             "name": user.name,
-            "email_verified": user.email_verified
+            "email_verified": user.email_verified,
+            "is_premium": user.is_premium,
+            "trial_days_remaining": user.trial_days_remaining,
+            "subscription_active": user.subscription_active,
+            "subscription_due_date": user.subscription_due_date,
         })
 
     def patch(self, request):
@@ -312,8 +316,34 @@ class UserProfileView(APIView):
             "id": user.id,
             "email": user.email,
             "name": user.name,
-            "email_verified": user.email_verified
+            "email_verified": user.email_verified,
+            "is_premium": user.is_premium,
+            "trial_days_remaining": user.trial_days_remaining,
         })
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
+
+        try:
+            user = CustomUser.objects.get(email=email)
+        except CustomUser.DoesNotExist:
+            # Don't reveal if email exists or not for security
+            return Response({"detail": "If this email exists, a reset code has been sent."}, status=200)
+
+        # Delete old codes for this user
+        EmailVerificationCode.objects.filter(user=user).delete()
+        
+        # Create new code (remove purpose parameter)
+        code_obj = EmailVerificationCode.create_for_user(user)
+        
+        # Send email with the code
+        send_verification_email_task.delay(user.id, code_obj.id)
+
+        logger.info(f"Password reset requested for {user.email} at {timezone.now()}")
+        return Response({"detail": "Password reset code sent to your email."}, status=200)
     
 class PublicUserView(generics.RetrieveAPIView):
     permission_classes = []  # Public access

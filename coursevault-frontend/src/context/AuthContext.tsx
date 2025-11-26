@@ -102,8 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userRes = await api.get("/auth/me/");
       setUser(userRes.data);
 
-      // Check subscription and redirect
-      if (checkSubscription(userRes.data)) {
+      // Check if user needs to pay (trial expired and no subscription)
+      if (userRes.data.trial_days_remaining === 0 && !userRes.data.subscription_active) {
         router.push("/pricing");
       } else {
         router.push("/dashboard");

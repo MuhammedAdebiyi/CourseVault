@@ -14,22 +14,25 @@ import logging
 logger = logging.getLogger("courses")
 
 
-
+# -------------------------------
 # Cloudflare R2 setup
-
+# -------------------------------
 r2_opts = settings.STORAGES["default"]["OPTIONS"]
 s3_client = boto3.client(
     "s3",
     endpoint_url=r2_opts["endpoint_url"],
     aws_access_key_id=r2_opts["access_key"],
-    aws_secret_access_key=r2_opts["secret_key"]
+    aws_secret_access_key=r2_opts["secret_key"],
+    config=boto3.session.Config(signature_version='s3v4'),  # FIXED: Force SigV4
+    region_name='auto'  # R2 uses 'auto' as region
 )
 R2_BUCKET = r2_opts["bucket_name"]
 
 
 def delete_file_from_r2(file_path):
     """Delete file from Cloudflare R2."""
-    key = file_path.replace("pdfs/", "")
+    # Use the full path as stored in database
+    key = file_path
     try:
         s3_client.delete_object(Bucket=R2_BUCKET, Key=key)
         logger.info(f"Deleted {file_path} from R2")
@@ -39,17 +42,24 @@ def delete_file_from_r2(file_path):
 
 def generate_presigned_url(file_name, expires_in=3600):
     """Generate a temporary signed URL for a PDF."""
-    key = file_name.replace("pdfs/", "")
-    return s3_client.generate_presigned_url(
-        'get_object',
-        Params={'Bucket': R2_BUCKET, 'Key': key},
-        ExpiresIn=expires_in
-    )
+    # Don't remove pdfs/ - use the full path as stored in database
+    key = file_name  # Use the file path exactly as stored
+    
+    try:
+        url = s3_client.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': R2_BUCKET, 'Key': key},
+            ExpiresIn=expires_in
+        )
+        return url
+    except Exception as e:
+        logger.error(f"Failed to generate presigned URL for {file_name}: {e}")
+        return None
 
 
-
+# -------------------------------
 # Folder ViewSet
-
+# -------------------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class FolderViewSet(viewsets.ModelViewSet):
     """
@@ -63,8 +73,14 @@ class FolderViewSet(viewsets.ModelViewSet):
         return FolderSerializer
     
     def get_queryset(self):
-        
+        # Only show user's own ROOT folders (no parent) for LIST action
         return Folder.objects.filter(owner=self.request.user, parent__isnull=True).order_by('-updated_at')
+    
+    def get_object(self):
+        """Override to allow access to ANY folder user owns, not just root"""
+        pk = self.kwargs.get('pk')
+        folder = get_object_or_404(Folder, id=pk, owner=self.request.user)
+        return folder
     
     def retrieve(self, request, *args, **kwargs):
         """Get single folder with all children and files"""
@@ -122,9 +138,9 @@ class FolderViewSet(viewsets.ModelViewSet):
         return Response(FolderSerializer(folder, context={'request': request}).data)
 
 
-
+# -------------------------------
 # PDF ViewSet
-
+# -------------------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class PDFViewSet(viewsets.ModelViewSet):
     """
@@ -136,6 +152,18 @@ class PDFViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Only show files from user's folders"""
         return PDF.objects.filter(folder__owner=self.request.user).order_by('-uploaded_at')
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Get PDF details with presigned download URL"""
+        pdf = self.get_object()
+        serializer = self.get_serializer(pdf)
+        data = serializer.data
+        
+        # Add presigned download URL
+        if pdf.file:
+            data['download_url'] = generate_presigned_url(pdf.file.name, expires_in=3600)
+        
+        return Response(data)
     
     def perform_create(self, serializer):
         """Create PDF and associate with folder owned by user"""
@@ -191,9 +219,9 @@ class PDFViewSet(viewsets.ModelViewSet):
         )
 
 
-
+# -------------------------------
 # Public Folder View
-
+# -------------------------------
 class PublicFolderView(generics.RetrieveAPIView):
     """View public folders"""
     permission_classes = [AllowAny]

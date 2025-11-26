@@ -1,18 +1,20 @@
+# folders/views.py
+
 from rest_framework import viewsets, generics, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.conf import settings
-from .models import Folder, PDF
-from .serializers import FolderSerializer, FolderListSerializer, PDFSerializer
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from accounts.serializers import UserSerializer
+from .models import Folder, PDF
+from .serializers import FolderSerializer, FolderListSerializer, PDFSerializer
 import boto3
 import logging
 
 logger = logging.getLogger("courses")
+
 
 # -------------------------------
 # Cloudflare R2 setup
@@ -48,7 +50,7 @@ def generate_presigned_url(file_name, expires_in=3600):
 
 
 # -------------------------------
-# Folder CRUD
+# Folder ViewSet
 # -------------------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class FolderViewSet(viewsets.ModelViewSet):
@@ -74,23 +76,35 @@ class FolderViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     def perform_create(self, serializer):
-        # Automatically set the owner
+        """Create folder with current user as owner"""
         serializer.save(owner=self.request.user)
     
     def destroy(self, request, *args, **kwargs):
-        """Delete folder and all its contents"""
+        """Delete folder and all its contents recursively"""
         folder = self.get_object()
         
-        # Delete all files in this folder first
-        folder.pdfs.all().delete()
-        
-        # Delete all subfolders recursively
+        # Recursive function to delete all subfolders
         def delete_subfolders(parent):
             for child in parent.children.all():
+                # Delete all PDFs in child folder
+                for pdf in child.pdfs.all():
+                    if pdf.file:
+                        delete_file_from_r2(pdf.file.name)
+                    pdf.delete()
+                # Recursively delete subfolders
                 delete_subfolders(child)
                 child.delete()
         
+        # Delete all PDFs in this folder
+        for pdf in folder.pdfs.all():
+            if pdf.file:
+                delete_file_from_r2(pdf.file.name)
+            pdf.delete()
+        
+        # Delete all subfolders
         delete_subfolders(folder)
+        
+        # Delete the folder itself
         folder.delete()
         
         return Response(
@@ -99,7 +113,7 @@ class FolderViewSet(viewsets.ModelViewSet):
         )
 
     @action(detail=True, methods=['patch'])
-    def rename(self, request, slug=None):
+    def rename(self, request, pk=None):
         """Rename folder"""
         folder = self.get_object()
         new_title = request.data.get("title")
@@ -111,7 +125,7 @@ class FolderViewSet(viewsets.ModelViewSet):
 
 
 # -------------------------------
-# PDF CRUD
+# PDF ViewSet
 # -------------------------------
 @method_decorator(csrf_exempt, name='dispatch')
 class PDFViewSet(viewsets.ModelViewSet):
@@ -122,20 +136,18 @@ class PDFViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        # Only show files from user's folders
+        """Only show files from user's folders"""
         return PDF.objects.filter(folder__owner=self.request.user).order_by('-uploaded_at')
     
     def perform_create(self, serializer):
-    # Add debug logging
-        print("=== CREATE FOLDER DEBUG ===")
-        print("Request data:", self.request.data)
-        print("User:", self.request.user)
-    
-        if not serializer.is_valid():
-            print("Serializer errors:", serializer.errors)
-    
-    # Automatically set the owner
-        serializer.save(owner=self.request.user)
+        """Create PDF and associate with folder owned by user"""
+        folder_id = self.request.data.get('folder')
+        
+        # Verify the folder belongs to the user
+        folder = get_object_or_404(Folder, id=folder_id, owner=self.request.user)
+        
+        # Save PDF with folder (don't pass owner - PDF model doesn't have it)
+        serializer.save(folder=folder)
     
     @action(detail=True, methods=['post'])
     def move(self, request, pk=None):
@@ -165,13 +177,14 @@ class PDFViewSet(viewsets.ModelViewSet):
         })
     
     def destroy(self, request, *args, **kwargs):
-        """Delete PDF file"""
+        """Delete PDF file from database and R2 storage"""
         pdf = self.get_object()
         
-        # Delete the actual file from storage
+        # Delete the actual file from R2
         if pdf.file:
-            pdf.file.delete(save=False)
+            delete_file_from_r2(pdf.file.name)
         
+        # Delete from database
         pdf.delete()
         
         return Response(
@@ -179,16 +192,21 @@ class PDFViewSet(viewsets.ModelViewSet):
             status=status.HTTP_204_NO_CONTENT
         )
 
+
 # -------------------------------
-# Public Folder
+# Public Folder View
 # -------------------------------
 class PublicFolderView(generics.RetrieveAPIView):
+    """View public folders"""
     permission_classes = [AllowAny]
     serializer_class = FolderSerializer
     lookup_field = "slug"
 
     def get(self, request, slug):
         folder = get_object_or_404(Folder, slug=slug, is_public=True)
+        
+        # Generate presigned URLs for all PDFs
         for pdf in folder.pdfs.all():
             pdf.download_url = generate_presigned_url(pdf.file.name)
+        
         return Response(FolderSerializer(folder, context={'request': request}).data)

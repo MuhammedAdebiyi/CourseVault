@@ -126,10 +126,16 @@ class PDFViewSet(viewsets.ModelViewSet):
         return PDF.objects.filter(folder__owner=self.request.user).order_by('-uploaded_at')
     
     def perform_create(self, serializer):
-        # Verify the folder belongs to the user
-        folder_id = self.request.data.get('folder')
-        folder = get_object_or_404(Folder, id=folder_id, owner=self.request.user)
-        serializer.save(folder=folder)
+    # Add debug logging
+        print("=== CREATE FOLDER DEBUG ===")
+        print("Request data:", self.request.data)
+        print("User:", self.request.user)
+    
+        if not serializer.is_valid():
+            print("Serializer errors:", serializer.errors)
+    
+    # Automatically set the owner
+        serializer.save(owner=self.request.user)
     
     @action(detail=True, methods=['post'])
     def move(self, request, pk=None):

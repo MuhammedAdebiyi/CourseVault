@@ -263,15 +263,20 @@ class PasswordResetRequestView(APIView):
         try:
             user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
-            return Response({"detail": "User not found"}, status=404)
+            # Don't reveal if email exists or not for security
+            return Response({"detail": "If this email exists, a reset code has been sent."}, status=200)
 
-        code_obj = EmailVerificationCode.create_for_user(user, purpose="password_reset")
-        send_verification_email_task.delay(user.id, code_obj.id, purpose="password_reset")
+        # Delete old codes for this user
+        EmailVerificationCode.objects.filter(user=user).delete()
+        
+        # Create new code (remove purpose parameter)
+        code_obj = EmailVerificationCode.create_for_user(user)
+        
+        # Send email with the code
+        send_verification_email_task.delay(user.id, code_obj.id)
 
         logger.info(f"Password reset requested for {user.email} at {timezone.now()}")
-        return Response({"detail": "Password reset code sent"}, status=200)
-
-
+        return Response({"detail": "Password reset code sent to your email."}, status=200)
 class PasswordResetConfirmView(APIView):
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)

@@ -55,18 +55,26 @@ class PDFSerializer(serializers.ModelSerializer):
 class FolderSerializer(serializers.ModelSerializer):
     children = serializers.SerializerMethodField()
     files = serializers.SerializerMethodField()
-    name = serializers.CharField(source='title')  
+    name = serializers.CharField(source='title', required=False)  # Map title to name for frontend
     
     class Meta:
         model = Folder
         fields = ['id', 'title', 'name', 'slug', 'is_public', 'parent', 'children', 'files']
         read_only_fields = ['id', 'slug']
     
+    def create(self, validated_data):
+        # Handle both 'name' and 'title' fields
+        if 'name' in self.initial_data and 'title' not in validated_data:
+            validated_data['title'] = self.initial_data['name']
+        return super().create(validated_data)
+    
     def get_children(self, obj):
+        # Get immediate children (subfolders)
         children = obj.children.all()
         return FolderSerializer(children, many=True, context=self.context).data
     
     def get_files(self, obj):
+        # Get files in this folder
         files = obj.pdfs.all().order_by('-uploaded_at')
         return PDFSerializer(files, many=True).data
 

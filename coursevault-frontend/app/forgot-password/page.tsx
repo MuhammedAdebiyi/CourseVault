@@ -19,12 +19,24 @@ export default function ForgotPasswordPage() {
     setSuccess(false);
     setLoading(true);
 
+    if (!email) {
+      setError("Please enter your email");
+      setLoading(false);
+      return;
+    }
+
     try {
       await api.post("/auth/password-reset/", { email });
       setSuccess(true);
+
+      // Redirect after 2 seconds
+      setTimeout(() => {
+        router.push(`/reset-password?email=${encodeURIComponent(email)}`);
+      }, 2000);
+
     } catch (err: any) {
-      console.error(err.response?.data || err.message);
-      setError(err.response?.data?.detail || "Something went wrong");
+      console.error("Password reset error:", err);
+      setError(err.response?.data?.detail || "Failed to send reset code. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -32,7 +44,8 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white p-6 relative">
-      {/* Global Loader */}
+
+      {/* Global Loader Overlay */}
       {loading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-50">
           <GlobalLoader />
@@ -46,18 +59,21 @@ export default function ForgotPasswordPage() {
           Enter your email to reset your password
         </p>
 
+        {/* Success Message */}
+        {success && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4 text-center">
+            Code sent! Redirecting...
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Error & Success Messages */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative">
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded relative">
-              Password reset code sent! Check your email.
-            </div>
-          )}
 
           {/* Email Input */}
           <div>
@@ -69,6 +85,7 @@ export default function ForgotPasswordPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full border border-gray-300 rounded px-3 py-2 text-black"
               required
+              disabled={loading}
             />
           </div>
 

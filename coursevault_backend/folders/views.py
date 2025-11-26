@@ -1,5 +1,3 @@
-# folders/views.py
-
 from rest_framework import viewsets, generics, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -16,9 +14,9 @@ import logging
 logger = logging.getLogger("courses")
 
 
-# -------------------------------
+
 # Cloudflare R2 setup
-# -------------------------------
+
 r2_opts = settings.STORAGES["default"]["OPTIONS"]
 s3_client = boto3.client(
     "s3",
@@ -49,9 +47,9 @@ def generate_presigned_url(file_name, expires_in=3600):
     )
 
 
-# -------------------------------
+
 # Folder ViewSet
-# -------------------------------
+
 @method_decorator(csrf_exempt, name='dispatch')
 class FolderViewSet(viewsets.ModelViewSet):
     """
@@ -65,7 +63,7 @@ class FolderViewSet(viewsets.ModelViewSet):
         return FolderSerializer
     
     def get_queryset(self):
-        # Only show user's own ROOT folders (no parent)
+        
         return Folder.objects.filter(owner=self.request.user, parent__isnull=True).order_by('-updated_at')
     
     def retrieve(self, request, *args, **kwargs):
@@ -124,9 +122,9 @@ class FolderViewSet(viewsets.ModelViewSet):
         return Response(FolderSerializer(folder, context={'request': request}).data)
 
 
-# -------------------------------
+
 # PDF ViewSet
-# -------------------------------
+
 @method_decorator(csrf_exempt, name='dispatch')
 class PDFViewSet(viewsets.ModelViewSet):
     """
@@ -193,9 +191,9 @@ class PDFViewSet(viewsets.ModelViewSet):
         )
 
 
-# -------------------------------
+
 # Public Folder View
-# -------------------------------
+
 class PublicFolderView(generics.RetrieveAPIView):
     """View public folders"""
     permission_classes = [AllowAny]

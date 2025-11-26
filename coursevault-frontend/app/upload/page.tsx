@@ -11,7 +11,7 @@ export default function UploadPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log({ file, privacy, allowDownload });
-    // TODO: connect to presign + file metadata API
+    
   };
 
   return (

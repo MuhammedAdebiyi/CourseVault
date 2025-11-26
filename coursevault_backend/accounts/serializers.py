@@ -75,7 +75,7 @@ class VerifyEmailSerializer(serializers.Serializer):
             verification.save(update_fields=["attempts"])
             raise serializers.ValidationError("Invalid verification code")
 
-        # Code is valid
+        
         verification.used = True
         verification.save(update_fields=["used"])
         user.email_verified = True
@@ -116,7 +116,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if not user.email_verified:
             raise serializers.ValidationError("Email not verified")
 
-        # Reset failed attempts on successful login
+        
         cache.delete(cache_key)
         logger.info(f"User logged in: {email} at {timezone.now()}")
 

@@ -249,7 +249,7 @@ class ResendCodeView(APIView):
 
         return Response({
             "detail": "Verification code resent",
-            "wait": 30  # frontend cooldown timer
+            "wait": 30  
         }, status=200)
 
 class PasswordResetRequestView(APIView):
@@ -263,13 +263,13 @@ class PasswordResetRequestView(APIView):
         try:
             user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
-            # Don't reveal if email exists or not for security
+            
             return Response({"detail": "If this email exists, a reset code has been sent."}, status=200)
 
-        # Delete old codes for this user
+        
         EmailVerificationCode.objects.filter(user=user).delete()
         
-        # Create new code (remove purpose parameter)
+        
         code_obj = EmailVerificationCode.create_for_user(user)
         
         # Send email with the code

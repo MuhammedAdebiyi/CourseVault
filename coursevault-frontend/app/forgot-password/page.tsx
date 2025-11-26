@@ -29,7 +29,7 @@ export default function ForgotPasswordPage() {
       await api.post("/auth/password-reset/", { email });
       setSuccess(true);
 
-      // Redirect after 2 seconds
+      
       setTimeout(() => {
         router.push(`/reset-password?email=${encodeURIComponent(email)}`);
       }, 2000);

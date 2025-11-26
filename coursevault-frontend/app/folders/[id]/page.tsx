@@ -31,7 +31,7 @@ export interface Folder {
   files?: File[];
 }
 
-// -----------------
+
 export default function FolderDetail() {
   const params = useParams();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -72,8 +72,8 @@ export default function FolderDetail() {
   const handleCreate = async (payload: { name: string; parentId?: number | null }) => {
     try {
       const body = {
-        title: payload.name,  // backend expects "title"
-        parent: Number(id),   // parent folder is the current folder
+        title: payload.name,  
+        parent: Number(id),   
       };
       const { data } = await api.post("/folders/", body);
       setFolder(prev => prev ? { ...prev, children: [data, ...(prev.children ?? [])] } : prev);
@@ -84,17 +84,17 @@ export default function FolderDetail() {
     }
   };
 
-  // File uploaded
+  
   const handleFileUploaded = (file: File) => {
     setFolder(prev => prev ? { ...prev, files: [file, ...prev.files ?? []] } : prev);
   };
 
-  // Delete file - FIXED
+  
   const handleDeleteFile = async (fileId: number) => {
     if (!confirm("Delete this file?")) return;
     
     try {
-      // FIXED: Use correct endpoint /folders/pdfs/{id}/ not /folders/pdfs/{id}/delete/
+      
       await api.delete(`/folders/pdfs/${fileId}/`);
       setFolder(prev => prev ? { ...prev, files: prev.files?.filter(f => f.id !== fileId) } : prev);
     } catch (err: any) {
@@ -103,7 +103,7 @@ export default function FolderDetail() {
     }
   };
 
-  // Move file
+  
   const handleMoveFile = async (fileId: number, targetFolderId: number) => {
     try {
       await api.post(`/folders/pdfs/${fileId}/move/`, { folder: targetFolderId });
@@ -115,7 +115,7 @@ export default function FolderDetail() {
     }
   };
 
-  // Delete subfolder
+  
   const handleDeleteSubfolder = (subfolderId: number) => {
     setFolder(prev => prev ? {
       ...prev,

@@ -67,14 +67,14 @@ export default function VerifyCodePage() {
     setError("");
 
     try {
-      // Verify code - FIXED: Only call once with correct path
+      
       const res = await api.post("/auth/verify-email/", { email, code });
       
-      // Store tokens returned from backend
+      
       localStorage.setItem("access_token", res.data.access);
       localStorage.setItem("refresh_token", res.data.refresh);
 
-      // Navigate to dashboard
+      
       router.push("/dashboard");
     } catch (err: any) {
       console.error("Verification error:", err);
@@ -92,7 +92,7 @@ export default function VerifyCodePage() {
     setError("");
 
     try {
-      await api.post("/auth/resend-code/", { email }); // FIXED: Added /auth/
+      await api.post("/auth/resend-code/", { email }); 
       setTimer(30);
     } catch (err: any) {
       console.error("Resend error:", err);

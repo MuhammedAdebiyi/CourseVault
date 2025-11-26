@@ -21,11 +21,11 @@ export default function SignUpPage() {
   const [successDialog, setSuccessDialog] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [error, setError] = useState(""); // Error state
+  const [error, setError] = useState(""); 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(""); // Clear previous errors
+    setError(""); 
 
     if (password !== confirmPassword) {
       setError("Passwords do not match!");
@@ -40,13 +40,13 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      await api.post("/auth/register/", { name, email, password }); // FIXED: Added /auth/
+      await api.post("/auth/register/", { name, email, password }); 
 
-      // Show success dialog
+      
       setSuccessDialog(true);
       setLoading(false);
 
-      // Auto-close dialog & redirect to verify email
+      
       setTimeout(() => {
         setSuccessDialog(false);
         router.push(`/verify-email?email=${encodeURIComponent(email)}`);
@@ -55,7 +55,7 @@ export default function SignUpPage() {
       setLoading(false);
       console.error("Registration error:", err.response?.data || err.message);
       
-      // Extract error message
+      
       const errorMessage = err.response?.data?.detail || 
                           err.response?.data?.error || 
                           err.response?.data?.message ||

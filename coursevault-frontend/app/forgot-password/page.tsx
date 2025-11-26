@@ -31,7 +31,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-[var(--background)] relative">
+    <div className="min-h-screen flex items-center justify-center bg-white p-6 relative">
       {/* Global Loader */}
       {loading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-50">
@@ -40,50 +40,60 @@ export default function ForgotPasswordPage() {
         </div>
       )}
 
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white dark:bg-[#111] p-6 rounded shadow-md w-96 relative z-10"
-      >
-        <h1 className="text-2xl font-bold mb-4 text-[var(--foreground)]">
-          Forgot Password
-        </h1>
+      <div className="w-full max-w-md border border-gray-200 rounded-lg p-6 shadow-md relative z-10">
+        <h1 className="text-2xl font-bold text-center mb-2">CourseVault</h1>
+        <p className="text-center text-gray-700 mb-6">
+          Enter your email to reset your password
+        </p>
 
-        {error && (
-          <p className="text-red-500 mb-3 text-center">{error}</p>
-        )}
-        {success && (
-          <p className="text-green-500 mb-3 text-center">
-            Password reset code sent! Check your email.
-          </p>
-        )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Error & Success Messages */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded relative">
+              Password reset code sent! Check your email.
+            </div>
+          )}
 
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full mb-3 p-2 border rounded"
-          required
-        />
+          {/* Email Input */}
+          <div>
+            <label className="block text-black mb-1">Email</label>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full border border-gray-300 rounded px-3 py-2 text-black"
+              required
+            />
+          </div>
 
-        <button
-          type="submit"
-          className="w-full p-2 bg-blue-500 text-white rounded disabled:opacity-50"
-          disabled={loading}
-        >
-          Send Reset Code
-        </button>
+          {/* Submit Button */}
+          <button
+            type="submit"
+            className="w-full bg-black text-white py-2 rounded hover:bg-gray-800 transition disabled:opacity-50"
+            disabled={loading}
+          >
+            Send Reset Code
+          </button>
+        </form>
 
-        <div className="mt-3 text-sm text-center">
+        {/* Back to Login */}
+        <p className="text-center text-gray-700 mt-4">
+          Remember your password?{" "}
           <button
             type="button"
             onClick={() => router.push("/login")}
-            className="text-blue-500 underline"
+            className="text-black font-semibold underline"
           >
             Back to login
           </button>
-        </div>
-      </form>
+        </p>
+      </div>
     </div>
   );
 }

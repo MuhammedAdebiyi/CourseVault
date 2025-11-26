@@ -181,4 +181,4 @@ if DEBUG:
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
     }
 
-    
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]

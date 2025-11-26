@@ -15,6 +15,13 @@ class Folder(models.Model):
         null=True,
         blank=True
     )
+    
+    # ADDED: Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
 
     def save(self, *args, **kwargs):
         if not self.slug:
@@ -25,12 +32,14 @@ class Folder(models.Model):
         return self.title
 
 
-
 class PDF(models.Model):
     folder = models.ForeignKey(Folder, related_name="pdfs", on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
     file = models.FileField(upload_to="pdfs/", max_length=1000)
     uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-uploaded_at']
 
     def __str__(self):
         return self.title

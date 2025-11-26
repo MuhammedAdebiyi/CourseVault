@@ -24,7 +24,8 @@ export interface File {
 
 export interface Folder {
   id: number;
-  name: string;
+  name?: string;
+  title?: string;
   parentId?: number | null;
   children?: Folder[];
   files?: File[];
@@ -65,6 +66,7 @@ export default function FolderDetail() {
 
   // Destructure with defaults
   const { children = [], files = [] } = folder;
+  const folderName = folder.name || folder.title || "Untitled";
 
   // Create subfolder
   const handleCreate = async (payload: { name: string; parentId?: number | null }) => {
@@ -76,8 +78,9 @@ export default function FolderDetail() {
       const { data } = await api.post("/folders/", body);
       setFolder(prev => prev ? { ...prev, children: [data, ...(prev.children ?? [])] } : prev);
       setCreateOpen(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to create subfolder:", err);
+      alert(err.response?.data?.detail || "Failed to create subfolder");
     }
   };
 
@@ -86,13 +89,17 @@ export default function FolderDetail() {
     setFolder(prev => prev ? { ...prev, files: [file, ...prev.files ?? []] } : prev);
   };
 
-  // Delete file
+  // Delete file - FIXED
   const handleDeleteFile = async (fileId: number) => {
+    if (!confirm("Delete this file?")) return;
+    
     try {
-      await api.delete(`/folders/pdfs/${fileId}/delete/`);
+      // FIXED: Use correct endpoint /folders/pdfs/{id}/ not /folders/pdfs/{id}/delete/
+      await api.delete(`/folders/pdfs/${fileId}/`);
       setFolder(prev => prev ? { ...prev, files: prev.files?.filter(f => f.id !== fileId) } : prev);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to delete file:", err);
+      alert(err.response?.data?.detail || "Failed to delete file");
     }
   };
 
@@ -102,31 +109,34 @@ export default function FolderDetail() {
       await api.post(`/folders/pdfs/${fileId}/move/`, { folder: targetFolderId });
       setFolder(prev => prev ? { ...prev, files: prev.files?.filter(f => f.id !== fileId) } : prev);
       setMoveOpen(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to move file:", err);
+      alert(err.response?.data?.detail || "Failed to move file");
     }
+  };
+
+  // Delete subfolder
+  const handleDeleteSubfolder = (subfolderId: number) => {
+    setFolder(prev => prev ? {
+      ...prev,
+      children: prev.children?.filter(child => child.id !== subfolderId)
+    } : prev);
   };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar foldersCount={0} activePage="folders" />
       <main className="flex-1 p-6">
-        <Breadcrumbs crumbs={[{ label: "Folders", href: "/folders" }, { label: folder.name }]} />
+        <Breadcrumbs crumbs={[{ label: "Folders", href: "/folders" }, { label: folderName }]} />
 
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">{folder.name}</h1>
+          <h1 className="text-2xl font-bold">{folderName}</h1>
           <div className="flex gap-2">
             <button
               onClick={() => setCreateOpen(true)}
-              className="px-3 py-1 border rounded hover:bg-gray-100 transition"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
             >
-              New subfolder
-            </button>
-            <button
-              onClick={() => setMoveOpen(true)}
-              className="px-3 py-1 border rounded hover:bg-gray-100 transition"
-            >
-              Move file
+              + New Subfolder
             </button>
           </div>
         </div>
@@ -138,28 +148,31 @@ export default function FolderDetail() {
             {children.length > 0
               ? children.map(c => (
                   <motion.div key={c.id} layout whileHover={{ scale: 1.03 }}>
-                    <FolderCard folder={c} />
+                    <FolderCard 
+                      folder={c} 
+                      onDelete={handleDeleteSubfolder}
+                    />
                   </motion.div>
                 ))
-              : <div className="text-gray-500">No subfolders</div>
+              : <div className="text-gray-500 col-span-4 text-center py-8">No subfolders yet</div>
             }
           </motion.div>
         </section>
 
         {/* Upload */}
         <section className="mb-6">
-          <h2 className="text-lg font-semibold mb-3">Upload file</h2>
+          <h2 className="text-lg font-semibold mb-3">Upload File</h2>
           <UploadFile onUploaded={handleFileUploaded} folderId={Number(id)} />
         </section>
 
         {/* Files */}
         <section>
-          <h2 className="text-lg font-semibold mb-3">Files</h2>
+          <h2 className="text-lg font-semibold mb-3">Files ({files.length})</h2>
           {files.length > 0
             ? (
               <motion.div layout className="bg-white rounded-xl shadow divide-y">
                 {files.map(file => (
-                  <motion.div key={file.id} layout whileHover={{ scale: 1.02 }}>
+                  <motion.div key={file.id} layout whileHover={{ scale: 1.01 }}>
                     <FileItem
                       file={file}
                       onDelete={handleDeleteFile}
@@ -169,7 +182,7 @@ export default function FolderDetail() {
                 ))}
               </motion.div>
             )
-            : <div className="p-4 text-gray-500">No files</div>
+            : <div className="p-8 text-center text-gray-500 bg-white rounded-xl shadow">No files yet. Upload one to get started!</div>
           }
         </section>
       </main>
@@ -189,12 +202,16 @@ export default function FolderDetail() {
         onCancel={() => setConfirmOpen(false)}
       />
       <MoveFileModal
-        open={moveOpen}
-        onClose={() => setMoveOpen(false)}
-        folders={children}
-        onMove={(fid, fid2) => handleMoveFile(fid, Number(fid2))}
-        fileId={selectedFileToMove ?? 0}
-      />
+  open={moveOpen}
+  onClose={() => setMoveOpen(false)}
+  folders={children.map(f => ({
+    ...f,
+    name: f.name ?? "Untitled", 
+  }))}
+  onMove={(fid, fid2) => handleMoveFile(fid, Number(fid2))}
+  fileId={selectedFileToMove ?? 0}
+/>
+
     </div>
   );
 }

@@ -10,6 +10,9 @@ from .models import Folder, PDF
 from .serializers import FolderSerializer, FolderListSerializer, PDFSerializer
 import boto3
 import logging
+from rest_framework.decorators import api_view
+from django.db.models import Q
+from datetime import timedelta
 
 logger = logging.getLogger("courses")
 
@@ -236,3 +239,180 @@ class PublicFolderView(generics.RetrieveAPIView):
             pdf.download_url = generate_presigned_url(pdf.file.name)
         
         return Response(FolderSerializer(folder, context={'request': request}).data)
+    
+@api_view(['GET'])
+def search_files(request):
+    """
+    Search files by title, tags, or date
+    Query params: q (query), tags (comma-separated), date_from, date_to
+    """
+    user = request.user
+    query = request.GET.get('q', '')
+    tags = request.GET.get('tags', '')
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    
+    # Start with user's non-deleted files
+    files = PDF.objects.filter(
+        folder__owner=user,
+        deleted_at__isnull=True
+    )
+    
+    # Text search in title and description
+    if query:
+        files = files.filter(
+            Q(title__icontains=query) | Q(description__icontains=query)
+        )
+    
+    # Filter by tags
+    if tags:
+        tag_list = [t.strip() for t in tags.split(',')]
+        for tag in tag_list:
+            files = files.filter(tags__contains=[tag])
+    
+    # Date range filter
+    if date_from:
+        files = files.filter(uploaded_at__gte=date_from)
+    if date_to:
+        files = files.filter(uploaded_at__lte=date_to)
+    
+    # Serialize and return
+    serializer = PDFSerializer(files[:50], many=True)  # Limit to 50 results
+    return Response({
+        'count': files.count(),
+        'results': serializer.data
+    })
+
+
+@api_view(['GET'])
+def recent_files(request):
+    """
+    Get recently viewed or uploaded files
+    Query param: type (viewed|uploaded) - default: viewed
+    """
+    user = request.user
+    file_type = request.GET.get('type', 'viewed')
+    
+    files = PDF.objects.filter(
+        folder__owner=user,
+        deleted_at__isnull=True
+    )
+    
+    if file_type == 'viewed':
+        files = files.filter(last_viewed__isnull=False).order_by('-last_viewed')
+    else:
+        files = files.order_by('-uploaded_at')
+    
+    serializer = PDFSerializer(files[:20], many=True)  # Last 20 files
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+def trash_list(request):
+    """
+    Get all deleted folders and files (last 30 days)
+    """
+    user = request.user
+    thirty_days_ago = timezone.now() - timedelta(days=30)
+    
+    # Get deleted folders
+    deleted_folders = Folder.objects.filter(
+        owner=user,
+        deleted_at__isnull=False,
+        deleted_at__gte=thirty_days_ago
+    )
+    
+    # Get deleted files
+    deleted_files = PDF.objects.filter(
+        folder__owner=user,
+        deleted_at__isnull=False,
+        deleted_at__gte=thirty_days_ago
+    )
+    
+    return Response({
+        'folders': FolderListSerializer(deleted_folders, many=True).data,
+        'files': PDFSerializer(deleted_files, many=True).data
+    })
+
+
+@api_view(['POST'])
+def restore_item(request, item_type, item_id):
+    """
+    Restore a deleted folder or file
+    item_type: 'folder' or 'file'
+    """
+    user = request.user
+    
+    if item_type == 'folder':
+        item = get_object_or_404(Folder, id=item_id, owner=user, deleted_at__isnull=False)
+    else:
+        item = get_object_or_404(PDF, id=item_id, folder__owner=user, deleted_at__isnull=False)
+    
+    item.restore()
+    
+    return Response({
+        'message': f'{item_type.capitalize()} restored successfully',
+        'id': item.id
+    })
+
+
+@api_view(['DELETE'])
+def permanent_delete(request, item_type, item_id):
+    """
+    Permanently delete a folder or file from trash
+    """
+    user = request.user
+    
+    if item_type == 'folder':
+        item = get_object_or_404(Folder, id=item_id, owner=user, deleted_at__isnull=False)
+        # Delete files in R2
+        for pdf in item.pdfs.all():
+            if pdf.file:
+                delete_file_from_r2(pdf.file.name)
+            pdf.delete()
+    else:
+        item = get_object_or_404(PDF, id=item_id, folder__owner=user, deleted_at__isnull=False)
+        if item.file:
+            delete_file_from_r2(item.file.name)
+    
+    item.delete()  # Hard delete
+    
+    return Response({
+        'message': f'{item_type.capitalize()} permanently deleted'
+    }, status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+def add_tags(request, file_id):
+    """
+    Add tags to a file
+    Body: { "tags": ["lecture", "important"] }
+    """
+    user = request.user
+    pdf = get_object_or_404(PDF, id=file_id, folder__owner=user)
+    
+    new_tags = request.data.get('tags', [])
+    
+    for tag in new_tags:
+        pdf.add_tag(tag)
+    
+    return Response({
+        'message': 'Tags added',
+        'tags': pdf.tags
+    })
+
+
+@api_view(['DELETE'])
+def remove_tag(request, file_id, tag):
+    """
+    Remove a specific tag from a file
+    """
+    user = request.user
+    pdf = get_object_or_404(PDF, id=file_id, folder__owner=user)
+    
+    pdf.remove_tag(tag)
+    
+    return Response({
+        'message': 'Tag removed',
+        'tags': pdf.tags
+    })

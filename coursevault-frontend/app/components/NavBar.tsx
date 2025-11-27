@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/AuthContext";
 import { List } from "react-bootstrap-icons";
+import SearchBar from "./SearchBar"; 
+import { FiTrash2 } from 'react-icons/fi';
 
 type Props = {
   showBottomNav?: boolean;
@@ -13,18 +15,24 @@ type Props = {
 export default function Navbar({ showBottomNav = false }: Props) {
   const { user, logout } = useAuth();
   const router = useRouter();
-  const [open, setOpen] = useState(false); 
+  const [open, setOpen] = useState(false);
 
   const handleLogout = async () => {
-    logout(); 
+    logout();
   };
 
   return (
     <>
-      <header className="w-full bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center">
+      <header className="w-full bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center gap-4">
+        {/* Logo */}
         <Link href="/" className="text-lg font-bold">
           CourseVault
         </Link>
+
+        {/* Desktop SearchBar centered */}
+        <div className="hidden md:block w-1/3">
+          <SearchBar />
+        </div>
 
         {/* Desktop nav */}
         <nav className="hidden md:flex space-x-4 items-center">
@@ -38,6 +46,10 @@ export default function Navbar({ showBottomNav = false }: Props) {
               <Link href="/dashboard" className="text-sm hover:underline">DashBoard</Link>
               <Link href="/folders" className="text-sm hover:underline">Folders</Link>
               <Link href="/profile" className="text-sm hover:underline">Profile</Link>
+              <Link href="/trash" className="flex items-center gap-2 p-2 hover:bg-gray-100">
+        <FiTrash2 />
+        Trash
+      </Link>
               <button onClick={handleLogout} className="text-sm hover:underline">Logout</button>
             </>
           )}
@@ -54,13 +66,25 @@ export default function Navbar({ showBottomNav = false }: Props) {
       {/* Mobile sidebar */}
       {open && (
         <>
-          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setOpen(false)} />
-          <aside className="fixed top-0 left-0 z-50 w-3/4 max-w-xs h-full bg-white shadow-lg p-6">
+          <div
+            className="fixed inset-0 bg-black/40 z-40"
+            onClick={() => setOpen(false)}
+          />
+
+          <aside className="fixed top-0 left-0 z-50 w-3/4 max-w-xs h-full bg-white shadow-lg p-6 overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <Link href="/" className="text-lg font-bold">CourseVault</Link>
+              <Link href="/" className="text-lg font-bold">
+                CourseVault
+              </Link>
               <button onClick={() => setOpen(false)}>✕</button>
             </div>
 
+            {/* Mobile SearchBar */}
+            <div className="mb-6">
+              <SearchBar />
+            </div>
+
+            {/* Mobile nav links */}
             <nav className="flex flex-col space-y-4">
               {!user ? (
                 <>
@@ -72,14 +96,21 @@ export default function Navbar({ showBottomNav = false }: Props) {
                   <Link href="/dashboard" onClick={() => setOpen(false)}>Dashboard</Link>
                   <Link href="/folders" onClick={() => setOpen(false)}>Folders</Link>
                   <Link href="/profile" onClick={() => setOpen(false)}>Profile</Link>
-                  <button onClick={() => { handleLogout(); setOpen(false); }}>Logout</button>
+                  <Link href="/trash" className="flex items-center gap-2 p-2 hover:bg-gray-100">
+                  <FiTrash2 />
+                  Trash
+                  </Link>
+                  <button
+                    onClick={() => { handleLogout(); setOpen(false); }}
+                  >
+                    Logout
+                  </button>
                 </>
               )}
             </nav>
           </aside>
         </>
       )}
-
     </>
   );
 }

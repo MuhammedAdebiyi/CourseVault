@@ -14,9 +14,9 @@ export default function DeleteFolderModal({ folder, onClose, onDelete }: Props) 
   const handleDelete = async () => {
     setLoading(true);
     try {
-    
-      await api.delete(`/folders/${folder.id}/`);
-      onDelete(folder.id);
+      
+      await api.delete(`/folders/${folder.id}/`); 
+      onDelete(folder.id); 
       onClose();
     } catch (err: any) {
       console.error("Delete error:", err);
@@ -31,7 +31,8 @@ export default function DeleteFolderModal({ folder, onClose, onDelete }: Props) 
       <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
         <h2 className="text-xl font-bold mb-4 text-gray-900">Delete Folder</h2>
         <p className="text-gray-700 mb-6">
-          Are you sure you want to delete <span className="font-semibold">"{folder.title}"</span> and all its contents? This action cannot be undone.
+          Are you sure you want to delete <span className="font-semibold">"{folder.title}"</span> and all its contents? 
+          This will move it to Trash and can be restored within 30 days.
         </p>
         <div className="flex justify-end gap-3">
           <button 

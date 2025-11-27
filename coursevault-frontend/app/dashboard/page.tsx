@@ -13,6 +13,9 @@ import RenameFolderModal from "../components/RenameFolderModal";
 import DeleteFolderModal from "../components/DeleteFolderModal";
 import UploadPDFModal from "../components/UploadPDFModal";
 
+
+import RecentFiles from "../components/RecentFiles";
+
 // Types
 interface FolderData {
   id: number;
@@ -59,7 +62,7 @@ export default function DashboardPage() {
         const foldersRes = await api.get("/folders/");
         const extraFolders = Array.isArray(foldersRes.data) ? foldersRes.data : [];
 
-        // Combine and deduplicate by ID
+        // Combine and deduplicate
         const allFolders = [...dashboardFolders, ...extraFolders];
         const uniqueFolders = allFolders.filter((folder, index, self) =>
           index === self.findIndex((f) => f.id === folder.id)
@@ -94,7 +97,7 @@ export default function DashboardPage() {
     return new Date(sorted[0].last_updated!).toLocaleString();
   }, [folders]);
 
-  // Show loading spinner while auth or folders are loading
+  // Loading screen
   if (loadingUser || loadingFolders) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-black">
@@ -111,7 +114,7 @@ export default function DashboardPage() {
       <p className="text-gray-600 mb-6">Here's your dashboard overview.</p>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         <motion.div
           className="bg-white p-4 rounded-xl shadow flex flex-col items-start"
           initial={{ opacity: 0, y: 10 }}
@@ -154,6 +157,15 @@ export default function DashboardPage() {
         </motion.div>
       </div>
 
+      <motion.div
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="mb-10"
+      >
+        <RecentFiles />
+      </motion.div>
+
       {/* Create Folder */}
       <div className="mb-4">
         <button
@@ -166,6 +178,7 @@ export default function DashboardPage() {
 
       {/* Folder Grid */}
       <h2 className="text-xl font-semibold mb-3">My courses</h2>
+
       {folders.length === 0 ? (
         <div className="text-center text-gray-500 py-10">No folders yet. Create one to get started!</div>
       ) : (
@@ -177,7 +190,6 @@ export default function DashboardPage() {
               animate={{ opacity: 1, y: 0 }}
               className="border p-4 rounded hover:shadow cursor-pointer flex items-center justify-between"
             >
-              {/* FIXED: Use folder.id instead of folder.slug */}
               <Link href={`/folders/${folder.id}`} className="flex items-center gap-3">
                 <Folder className="text-black" size={24} />
                 <div>
@@ -188,32 +200,34 @@ export default function DashboardPage() {
 
               {/* Actions */}
               <div className="flex gap-2">
-                <button 
+                <button
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     setRenameModalOpen(folder);
-                  }} 
+                  }}
                   className="text-sm text-blue-600 hover:underline"
                 >
                   Rename
                 </button>
-                <button 
+
+                <button
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     setDeleteModalOpen(folder);
-                  }} 
+                  }}
                   className="text-sm text-red-600 hover:underline"
                 >
                   Delete
                 </button>
-                <button 
+
+                <button
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     setUploadModalOpen(folder);
-                  }} 
+                  }}
                   className="text-sm text-green-600 hover:underline"
                 >
                   Upload PDF
@@ -232,7 +246,6 @@ export default function DashboardPage() {
           parentId={null}
           onCreate={async ({ name, parentId }) => {
             try {
-              // FIXED: Use /folders/ instead of /auth/folders/
               const res = await api.post("/folders/", { title: name, parent: parentId });
               setFolders((prev) => [res.data, ...prev]);
               setCreateModalOpen(false);
@@ -248,11 +261,12 @@ export default function DashboardPage() {
         <RenameFolderModal
           folder={renameModalOpen}
           onClose={() => setRenameModalOpen(null)}
-          onRename={async (updatedPayload) => {
+          onRename={async (payload) => {
             try {
-              
-              const updated = await api.patch(`/folders/${renameModalOpen?.id}/`, updatedPayload);
-              setFolders((prev) => prev.map((f) => (f.id === updated.data.id ? updated.data : f)));
+              const updated = await api.patch(`/folders/${renameModalOpen?.id}/`, payload);
+              setFolders((prev) =>
+                prev.map((f) => (f.id === updated.data.id ? updated.data : f))
+              );
               setRenameModalOpen(null);
             } catch (err) {
               console.error("Failed to rename folder:", err);
@@ -266,18 +280,22 @@ export default function DashboardPage() {
         <DeleteFolderModal
           folder={deleteModalOpen}
           onClose={() => setDeleteModalOpen(null)}
-          onDelete={async (id) => {
+          onDelete={(id) => {
+            setFolders((prev) => prev.filter((f) => f.id !== id));
+            setDeleteModalOpen(null);
           }}
         />
       )}
 
-      {uploadModalOpen && ( 
+      {uploadModalOpen && (
         <UploadPDFModal
           folder={uploadModalOpen}
           onClose={() => setUploadModalOpen(null)}
           onPDFUploaded={(folderId, pdf) => {
             setFolders((prev) =>
-              prev.map((f) => (f.id === folderId ? { ...f, files_count: f.files_count + 1 } : f))
+              prev.map((f) =>
+                f.id === folderId ? { ...f, files_count: f.files_count + 1 } : f
+              )
             );
             setUploadModalOpen(null);
           }}

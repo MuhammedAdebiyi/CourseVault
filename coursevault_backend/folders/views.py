@@ -14,17 +14,17 @@ import logging
 logger = logging.getLogger("courses")
 
 
-# -------------------------------
+
 # Cloudflare R2 setup
-# -------------------------------
+
 r2_opts = settings.STORAGES["default"]["OPTIONS"]
 s3_client = boto3.client(
     "s3",
     endpoint_url=r2_opts["endpoint_url"],
     aws_access_key_id=r2_opts["access_key"],
     aws_secret_access_key=r2_opts["secret_key"],
-    config=boto3.session.Config(signature_version='s3v4'),  # FIXED: Force SigV4
-    region_name='auto'  # R2 uses 'auto' as region
+    config=boto3.session.Config(signature_version='s3v4'),  
+    region_name='auto'  
 )
 R2_BUCKET = r2_opts["bucket_name"]
 
@@ -57,9 +57,9 @@ def generate_presigned_url(file_name, expires_in=3600):
         return None
 
 
-# -------------------------------
+
 # Folder ViewSet
-# -------------------------------
+
 @method_decorator(csrf_exempt, name='dispatch')
 class FolderViewSet(viewsets.ModelViewSet):
     """

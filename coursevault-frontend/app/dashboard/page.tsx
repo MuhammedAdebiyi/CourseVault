@@ -191,6 +191,7 @@ export default function DashboardPage() {
                 <button 
                   onClick={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     setRenameModalOpen(folder);
                   }} 
                   className="text-sm text-blue-600 hover:underline"
@@ -200,6 +201,7 @@ export default function DashboardPage() {
                 <button 
                   onClick={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     setDeleteModalOpen(folder);
                   }} 
                   className="text-sm text-red-600 hover:underline"
@@ -209,6 +211,7 @@ export default function DashboardPage() {
                 <button 
                   onClick={(e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     setUploadModalOpen(folder);
                   }} 
                   className="text-sm text-green-600 hover:underline"
@@ -247,7 +250,7 @@ export default function DashboardPage() {
           onClose={() => setRenameModalOpen(null)}
           onRename={async (updatedPayload) => {
             try {
-              // FIXED: Use /folders/ instead of /auth/folders/
+              
               const updated = await api.patch(`/folders/${renameModalOpen?.id}/`, updatedPayload);
               setFolders((prev) => prev.map((f) => (f.id === updated.data.id ? updated.data : f)));
               setRenameModalOpen(null);
@@ -264,15 +267,6 @@ export default function DashboardPage() {
           folder={deleteModalOpen}
           onClose={() => setDeleteModalOpen(null)}
           onDelete={async (id) => {
-            try {
-              // FIXED: Use /folders/ instead of /auth/folders/
-              await api.delete(`/folders/${id}/`);
-              setFolders((prev) => prev.filter((f) => f.id !== id));
-              setDeleteModalOpen(null);
-            } catch (err) {
-              console.error("Failed to delete folder:", err);
-              alert("Failed to delete folder");
-            }
           }}
         />
       )}

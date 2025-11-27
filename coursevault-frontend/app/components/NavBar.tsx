@@ -35,6 +35,7 @@ export default function Navbar({ showBottomNav = false }: Props) {
             </>
           ) : (
             <>
+              <Link href="/dashboard" className="text-sm hover:underline">DashBoard</Link>
               <Link href="/folders" className="text-sm hover:underline">Folders</Link>
               <Link href="/profile" className="text-sm hover:underline">Profile</Link>
               <button onClick={handleLogout} className="text-sm hover:underline">Logout</button>
@@ -68,6 +69,7 @@ export default function Navbar({ showBottomNav = false }: Props) {
                 </>
               ) : (
                 <>
+                  <Link href="/dashboard" onClick={() => setOpen(false)}>Dashboard</Link>
                   <Link href="/folders" onClick={() => setOpen(false)}>Folders</Link>
                   <Link href="/profile" onClick={() => setOpen(false)}>Profile</Link>
                   <button onClick={() => { handleLogout(); setOpen(false); }}>Logout</button>

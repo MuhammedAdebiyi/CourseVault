@@ -23,10 +23,10 @@ export default function SearchBar() {
   const [totalCount, setTotalCount] = useState(0);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  // Common tags for quick filtering
+  
   const commonTags = ["lecture", "assignment", "exam", "notes", "important", "reference"];
 
-  // Search when query or tags change (with debounce)
+  
   useEffect(() => {
     const timer = setTimeout(() => {
       if (query.length >= 2 || selectedTags.length > 0) {
@@ -39,7 +39,7 @@ export default function SearchBar() {
     return () => clearTimeout(timer);
   }, [query, selectedTags]);
 
-  // Close on outside click
+  
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
@@ -175,15 +175,17 @@ export default function SearchBar() {
                             <FiCalendar size={12} />
                             {new Date(file.uploaded_at).toLocaleDateString()}
                           </span>
-                          <span className="text-xs text-gray-500">
-                            {formatFileSize(file.file_size)}
-                          </span>
+                          {file.file_size > 0 && (
+                            <span className="text-xs text-gray-500">
+                              {formatFileSize(file.file_size)}
+                            </span>
+                          )}
                         </div>
-                        {file.tags.length > 0 && (
+                        {file.tags && file.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
-                            {file.tags.map(tag => (
+                            {file.tags.map((tag, idx) => (
                               <span
-                                key={tag}
+                                key={`${tag}-${idx}`}
                                 className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full"
                               >
                                 {tag}

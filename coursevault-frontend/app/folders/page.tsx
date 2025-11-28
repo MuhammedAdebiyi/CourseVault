@@ -11,13 +11,15 @@ import { motion } from "framer-motion";
 // ----- Types -----
 export interface Folder {
   id: number;
-  name: string;
+  name?: string;
+  title?: string;
   parentId?: number | null;
   children?: Folder[];
   files?: any[];
+  files_count?: number;
 }
 
-// -----------------
+
 export default function FoldersPage() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +57,11 @@ export default function FoldersPage() {
     }
   };
 
+  // Delete folder
+  const handleDelete = (folderId: number) => {
+    setFolders(prev => prev.filter(f => f.id !== folderId));
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar foldersCount={folders.length} activePage="folders" />
@@ -83,7 +90,11 @@ export default function FoldersPage() {
         ) : (
           <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {folders.map(f => (
-              <FolderCard folder={f} key={f.id} />
+              <FolderCard 
+                folder={f} 
+                key={f.id}
+                onDelete={handleDelete}  
+              />
             ))}
           </motion.div>
         )}

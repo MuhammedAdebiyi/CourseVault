@@ -2,15 +2,16 @@ from rest_framework import viewsets, generics, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.decorators import api_view
 from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from django.utils import timezone 
 from .models import Folder, PDF
 from .serializers import FolderSerializer, FolderListSerializer, PDFSerializer
 import boto3
 import logging
-from rest_framework.decorators import api_view
 from django.db.models import Q
 from datetime import timedelta
 
@@ -141,9 +142,9 @@ class FolderViewSet(viewsets.ModelViewSet):
         return Response(FolderSerializer(folder, context={'request': request}).data)
 
 
-# -------------------------------
+
 # PDF ViewSet
-# -------------------------------
+
 @method_decorator(csrf_exempt, name='dispatch')
 class PDFViewSet(viewsets.ModelViewSet):
     """
@@ -222,9 +223,9 @@ class PDFViewSet(viewsets.ModelViewSet):
         )
 
 
-# -------------------------------
+
 # Public Folder View
-# -------------------------------
+
 class PublicFolderView(generics.RetrieveAPIView):
     """View public folders"""
     permission_classes = [AllowAny]
@@ -312,6 +313,12 @@ def trash_list(request):
     """
     Get all deleted folders and files (last 30 days)
     """
+    from rest_framework.permissions import IsAuthenticated
+    from rest_framework.decorators import permission_classes
+    
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required'}, status=401)
+    
     user = request.user
     thirty_days_ago = timezone.now() - timedelta(days=30)
     

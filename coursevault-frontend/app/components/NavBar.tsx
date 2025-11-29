@@ -5,8 +5,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/AuthContext";
 import { List } from "react-bootstrap-icons";
-import SearchBar from "./SearchBar"; 
-import { FiTrash2 } from 'react-icons/fi';
+import SearchBar from "./SearchBar";
+import { FiUser } from "react-icons/fi";
+
+
+import {
+  FiHome,
+  FiFolder,
+  FiTrash2,
+  FiSearch,
+  FiClock,
+  FiHeart,
+  FiCompass,
+} from "react-icons/fi";
 
 type Props = {
   showBottomNav?: boolean;
@@ -29,33 +40,63 @@ export default function Navbar({ showBottomNav = false }: Props) {
           CourseVault
         </Link>
 
-        {/* Desktop SearchBar centered */}
+        {/* Desktop SearchBar */}
         <div className="hidden md:block w-1/3">
           <SearchBar />
         </div>
 
-        {/* Desktop nav */}
-        <nav className="hidden md:flex space-x-4 items-center">
+        {/* Desktop Nav */}
+        <nav className="hidden md:flex items-center space-x-6 text-sm">
           {!user ? (
             <>
-              <Link href="/login" className="text-sm hover:underline">Login</Link>
-              <Link href="/signup" className="text-sm hover:underline">Sign Up</Link>
+              <Link href="/login" className="hover:underline">Login</Link>
+              <Link href="/signup" className="hover:underline">Sign Up</Link>
             </>
           ) : (
             <>
-              <Link href="/dashboard" className="text-sm hover:underline">DashBoard</Link>
-              <Link href="/folders" className="text-sm hover:underline">Folders</Link>
-              <Link href="/profile" className="text-sm hover:underline">Profile</Link>
-              <Link href="/trash" className="flex items-center gap-2 p-2 hover:bg-gray-100">
-        <FiTrash2 />
-        Trash
-      </Link>
-              <button onClick={handleLogout} className="text-sm hover:underline">Logout</button>
+              <Link href="/dashboard" className="flex items-center gap-2 hover:text-blue-600">
+                <FiHome size={18} /> Home
+              </Link>
+
+              <Link href="/folders" className="flex items-center gap-2 hover:text-blue-600">
+                <FiFolder size={18} /> Folders
+              </Link>
+
+              <Link href="/library" className="flex items-center gap-2 hover:text-blue-600">
+                <FiHeart size={18} /> Library
+              </Link>
+
+              <Link href="/discover" className="flex items-center gap-2 hover:text-blue-600">
+                <FiCompass size={18} /> Discover
+              </Link>
+
+              <Link href="/recent" className="flex items-center gap-2 hover:text-blue-600">
+                <FiClock size={18} /> Recent
+              </Link>
+
+              <Link href="/search" className="flex items-center gap-2 hover:text-blue-600">
+                <FiSearch size={18} /> Search
+              </Link>
+
+              <Link href="/profile" className="flex items-center gap-2 hover:text-blue-600">
+                <FiUser size={18} /> Profile
+              </Link>
+
+              <Link href="/trash" className="flex items-center gap-2 hover:text-blue-600">
+                <FiTrash2 size={18} /> Trash
+              </Link>
+
+              <button
+                onClick={handleLogout}
+                className="hover:underline text-red-500"
+              >
+                Logout
+              </button>
             </>
           )}
         </nav>
 
-        {/* Mobile hamburger */}
+        {/* Mobile Hamburger */}
         <div className="md:hidden flex items-center">
           <button onClick={() => setOpen(!open)}>
             <List size={28} />
@@ -63,7 +104,7 @@ export default function Navbar({ showBottomNav = false }: Props) {
         </div>
       </header>
 
-      {/* Mobile sidebar */}
+      {/* Mobile Sidebar */}
       {open && (
         <>
           <div
@@ -79,13 +120,13 @@ export default function Navbar({ showBottomNav = false }: Props) {
               <button onClick={() => setOpen(false)}>✕</button>
             </div>
 
-            {/* Mobile SearchBar */}
+            {/* Mobile Search */}
             <div className="mb-6">
               <SearchBar />
             </div>
 
-            {/* Mobile nav links */}
-            <nav className="flex flex-col space-y-4">
+            {/* Mobile Nav Links */}
+            <nav className="flex flex-col space-y-5 text-lg">
               {!user ? (
                 <>
                   <Link href="/login" onClick={() => setOpen(false)}>Login</Link>
@@ -93,15 +134,42 @@ export default function Navbar({ showBottomNav = false }: Props) {
                 </>
               ) : (
                 <>
-                  <Link href="/dashboard" onClick={() => setOpen(false)}>Dashboard</Link>
-                  <Link href="/folders" onClick={() => setOpen(false)}>Folders</Link>
-                  <Link href="/profile" onClick={() => setOpen(false)}>Profile</Link>
-                  <Link href="/trash" className="flex items-center gap-2 p-2 hover:bg-gray-100">
-                  <FiTrash2 />
-                  Trash
+                  <Link href="/dashboard" onClick={() => setOpen(false)} className="flex items-center gap-3">
+                    <FiHome size={20} /> Home
                   </Link>
+
+                  <Link href="/folders" onClick={() => setOpen(false)} className="flex items-center gap-3">
+                    <FiFolder size={20} /> All Folders
+                  </Link>
+
+                  <Link href="/library" onClick={() => setOpen(false)} className="flex items-center gap-3">
+                    <FiHeart size={20} /> My Library
+                  </Link>
+
+                  <Link href="/discover" onClick={() => setOpen(false)} className="flex items-center gap-3">
+                    <FiCompass size={20} /> Discover
+                  </Link>
+
+                  <Link href="/" onClick={() => setOpen(false)} className="flex items-center gap-3">
+                    <FiClock size={20} /> Recent Files
+                  </Link>
+
+                  <Link href="/search" onClick={() => setOpen(false)} className="flex items-center gap-3">
+                    <FiSearch size={20} /> Search
+                  </Link>
+                  <Link href="/profile" onClick={() => setOpen(false)} className="flex items-center gap-3">
+                    <FiUser size={20} /> Profile
+                  </Link>
+                  <Link href="/trash" onClick={() => setOpen(false)} className="flex items-center gap-3">
+                    <FiTrash2 size={20} /> Trash
+                  </Link>
+
                   <button
-                    onClick={() => { handleLogout(); setOpen(false); }}
+                    onClick={() => {
+                      handleLogout();
+                      setOpen(false);
+                    }}
+                    className="text-red-500 text-left"
                   >
                     Logout
                   </button>

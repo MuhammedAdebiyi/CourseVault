@@ -3,11 +3,6 @@ from django.conf import settings
 from datetime import datetime, timedelta
 
 def generate_presigned_url(file_key, expires_in=3600):
-    """
-    Generate a temporary URL for accessing a file in Cloudflare R2.
-    :param file_key: the path/key of the file in R2, e.g., 'pdfs/myfile.pdf'
-    :param expires_in: seconds the link is valid for (default: 1 hour)
-    """
     s3_client = boto3.client(
         "s3",
         region_name="auto",

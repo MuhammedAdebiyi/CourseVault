@@ -20,8 +20,6 @@ interface FileItemProps {
 
 export default function FileItem({ file, onDelete, onMove }: FileItemProps) {
   const [loading, setLoading] = useState(false);
-
-  // NEW: View modal state
   const [viewUrl, setViewUrl] = useState<string | null>(null);
 
   const handleView = async () => {
@@ -31,7 +29,7 @@ export default function FileItem({ file, onDelete, onMove }: FileItemProps) {
       const downloadUrl = response.data.download_url;
 
       if (downloadUrl) {
-        setViewUrl(downloadUrl); // open modal with pdf
+        setViewUrl(downloadUrl);
       } else {
         alert("Unable to generate view link");
       }
@@ -62,6 +60,27 @@ export default function FileItem({ file, onDelete, onMove }: FileItemProps) {
     } catch (error) {
       console.error("Download error:", error);
       alert("Failed to download file");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Move "${file.title}" to trash?`)) return;
+
+    setLoading(true);
+    try {
+      
+      await api.delete(`/folders/pdfs/${file.id}/`);
+      
+     
+      alert("File moved to trash. You can restore it from the Trash section.");
+      
+      
+      onDelete(file.id);
+    } catch (error) {
+      console.error("Delete error:", error);
+      alert("Failed to move file to trash");
     } finally {
       setLoading(false);
     }
@@ -113,15 +132,12 @@ export default function FileItem({ file, onDelete, onMove }: FileItemProps) {
             Move
           </button>
 
-          {/* Delete Button */}
+          {/* Delete Button (Now Moves to Trash) */}
           <button
-            onClick={() => {
-              if (confirm(`Delete "${file.title}"?`)) {
-                onDelete(file.id);
-              }
-            }}
-            className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-red-50 hover:border-red-300 transition flex items-center gap-2 text-sm text-gray-700 hover:text-red-600"
-            title="Delete file"
+            onClick={handleDelete}
+            disabled={loading}
+            className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-red-50 hover:border-red-300 transition flex items-center gap-2 text-sm text-gray-700 hover:text-red-600 disabled:opacity-50"
+            title="Move to trash"
           >
             <FiTrash2 size={16} />
             Delete

@@ -30,8 +30,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     
     # Subscription fields
     subscription_active = models.BooleanField(default=False)
-    subscription_due_date = models.DateField(null=True, blank=True)  # When subscription expires
-    created_at = models.DateTimeField(auto_now_add=True)  # Account creation date
+    subscription_due_date = models.DateField(null=True, blank=True)  
+    created_at = models.DateTimeField(auto_now_add=True)  
     
     objects = CustomUserManager()
 
@@ -43,14 +43,10 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     
     @property
     def is_premium(self):
-        """
-        Check if user has active subscription or is within free trial period
-        """
-        # If subscription is explicitly active and not expired
         if self.subscription_active and self.subscription_due_date:
             return self.subscription_due_date >= date.today()
         
-        # Check if within 30-day free trial (from registration)
+        
         if self.created_at:
             trial_end = self.created_at.date() + timedelta(days=30)
             return date.today() <= trial_end
@@ -59,11 +55,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     
     @property
     def trial_days_remaining(self):
-        """
-        Calculate remaining trial days
-        """
+        
         if self.subscription_active:
-            return None  # No trial if subscribed
+            return None  
         
         if self.created_at:
             trial_end = self.created_at.date() + timedelta(days=30)
@@ -74,9 +68,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     
     @property
     def needs_payment(self):
-        """
-        Check if user needs to make payment (trial expired and no subscription)
-        """
+        
         return not self.is_premium
 
 

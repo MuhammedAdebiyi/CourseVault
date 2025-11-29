@@ -17,14 +17,16 @@ export default function UploadPDFModal({ folder, onClose, onPDFUploaded }: Props
     setLoading(true);
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("folder", String(folder.id));
+    formData.append("folder_id", String(folder.id)); 
+    formData.append("title", file.name.replace(".pdf", "")); 
 
     try {
-      const res = await api.post("/pdfs/", formData);
+      const res = await api.post("/folders/pdfs/", formData);
       onPDFUploaded(folder.id, res.data);
       onClose();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      alert(err.response?.data?.detail || "Upload failed");
     } finally {
       setLoading(false);
     }

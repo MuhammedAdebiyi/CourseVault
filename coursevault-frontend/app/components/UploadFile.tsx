@@ -49,7 +49,7 @@ export default function UploadFile({ folderId, onUploaded }: UploadFileProps) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("title", file.name.replace(".pdf", ""));
-    formData.append("folder", folderId.toString());
+    formData.append("folder_id", folderId.toString()); 
 
     try {
       const response = await api.post("/folders/pdfs/", formData, {

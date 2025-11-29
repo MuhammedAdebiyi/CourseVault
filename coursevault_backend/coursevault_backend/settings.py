@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'storages',
     'accounts',
     'folders',
+    'django_extensions',
 ]
 
 # MIDDLEWARE

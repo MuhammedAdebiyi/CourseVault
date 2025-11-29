@@ -1,6 +1,10 @@
 from django.apps import AppConfig
 
 
-class CoursesConfig(AppConfig):
+class FoldersConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'folders'
+    
+    def ready(self):
+        """Import signals when app is ready"""
+        import folders.signals  

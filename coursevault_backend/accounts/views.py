@@ -1,51 +1,48 @@
+import logging
+from datetime import timedelta
+
+from django.conf import settings
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+
 from rest_framework import generics, status
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import AllowAny
-from django.utils import timezone
-from datetime import timedelta
-from django.shortcuts import get_object_or_404
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
+
 from django.core.cache import cache
-import logging
-from .models import CustomUser
-from .serializers import PublicUserSerializer
-from rest_framework.permissions import IsAuthenticated
-import boto3
-from django.conf import settings
-from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.permissions import AllowAny
-from django.core.cache import cache
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
-from .serializers import CustomTokenObtainPairSerializer
-import logging
+
 from .models import CustomUser, EmailVerificationCode
-from folders.models import PDF, Folder
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 from .serializers import (
     PasswordResetRequestSerializer,
     PasswordResetConfirmSerializer,
+    LoginSerializer,
+    ResendVerificationSerializer,
     RegisterSerializer,
     VerifyEmailSerializer,
-    CustomTokenObtainPairSerializer
+    CustomTokenObtainPairSerializer,
+    PublicUserSerializer,
 )
 from .tasks import send_verification_email_task
-from .email import send_verification_email
+from .email import send_verification_email  # optional direct send
+
+from folders.models import PDF, Folder
 
 logger = logging.getLogger("accounts")
 
-
+# Rate/lockout constants
 MAX_LOGIN_ATTEMPTS = 5
-LOCKOUT_TIME = 15 * 60  
+LOCKOUT_TIME = 15 * 60  # seconds
 MAX_OTP_REQUESTS_PER_HOUR = 3
 
 
+# -----------------------
+# Customer dashboard
+# -----------------------
 class CustomerDashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -57,91 +54,123 @@ class CustomerDashboardView(APIView):
                 "id": f.id,
                 "title": f.title,
                 "slug": f.slug,
-                "files_count": f.pdfs.count(),  
-                "last_updated": f.updated_at.isoformat() if hasattr(f, 'updated_at') else None,
+                "files_count": f.pdfs.count(),
+                "last_updated": f.updated_at.isoformat() if hasattr(f, "updated_at") else None,
             }
             for f in folders
         ]
 
-        # Fetch stats
         total_pdfs = PDF.objects.filter(folder__owner=user).count()
         total_folders = Folder.objects.filter(owner=user).count()
 
-        # Subscription info
         subscription_status = "Expired"
         if getattr(user, "subscription_expires_at", None):
             if user.subscription_expires_at > timezone.now():
                 subscription_status = "Active"
 
-        return Response({
-            "user": {
-                "id": user.id,
-                "email": user.email,
-                "name": user.name,
-                "email_verified": user.email_verified,
-                "is_premium": getattr(user, "is_premium", False)
-            },
-            "folders": folder_data,
-            "stats": {
-                "pdf_count": total_pdfs,
-                "folder_count": total_folders,
-            },
-            "subscription": subscription_status
-        })
+        return Response(
+            {
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "name": user.name,
+                    "email_verified": user.email_verified,
+                    "is_premium": getattr(user, "is_premium", False),
+                },
+                "folders": folder_data,
+                "stats": {"pdf_count": total_pdfs, "folder_count": total_folders},
+                "subscription": subscription_status,
+            }
+        )
 
 
-class RegisterView(generics.CreateAPIView):
-    serializer_class = RegisterSerializer
+# -----------------------
+# Registration (uses enhanced RegisterSerializer)
+# -----------------------
+class RegisterView(APIView):
     permission_classes = [AllowAny]
 
-    def perform_create(self, serializer):
-        user = serializer.save()
-        code_obj = EmailVerificationCode.objects.filter(user=user).order_by("-created_at").first()
-        if code_obj:
-            send_verification_email_task.delay(user.id, code_obj.id)
-        logger.info(f"User registered: {user.email} at {timezone.now()}")
-
-
-@method_decorator(csrf_exempt, name="dispatch")
-class VerifyEmailView(generics.GenericAPIView):
-    serializer_class = VerifyEmailSerializer
-    permission_classes = [AllowAny]  
-    def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        email = serializer.validated_data.get("email")
-        code = serializer.validated_data.get("code")
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
 
         try:
-            user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
-            return Response({"error": "User not found"}, status=404)
+            serializer.is_valid(raise_exception=True)
+            user = serializer.save()
 
-        try:
-            verification = EmailVerificationCode.objects.get(
-                user=user, code=code
+            # send verification email async if you have a task
+            code_obj = EmailVerificationCode.objects.filter(user=user).order_by("-created_at").first()
+            if code_obj:
+                try:
+                    send_verification_email_task.delay(user.id, code_obj.id)
+                except Exception:
+                    # fallback to direct send (optional)
+                    try:
+                        send_verification_email(user.email, code_obj.code)
+                    except Exception as exc:
+                        logger.exception("Failed sending verification email: %s", exc)
+
+            logger.info(f"User registered: {user.email} at {timezone.now()}")
+
+            return Response(
+                {
+                    "message": "Registration successful. Verification code sent.",
+                    "email": user.email,
+                    "requires_verification": True,
+                },
+                status=status.HTTP_201_CREATED,
             )
-        except EmailVerificationCode.DoesNotExist:
-            return Response({"error": "Invalid verification code"}, status=400)
 
-        if timezone.now() > verification.created_at + timedelta(minutes=10):
-            verification.delete()
-            return Response({"error": "Code has expired"}, status=400)
+        except Exception as e:
+            # Detect structured unverified-email error raised by serializer
+            if hasattr(e, "detail") and isinstance(e.detail, dict):
+                email_error = e.detail.get("email")
+                if isinstance(email_error, dict) and email_error.get("error_type") == "unverified_email":
+                    return Response(
+                        {
+                            "error_type": "unverified_email",
+                            "message": email_error["message"],
+                            "email": email_error["email"],
+                            "requires_verification": True,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-        user.email_verified = True
-        user.save()
-        verification.delete()
+            return Response(serializer.errors if hasattr(serializer, "errors") else {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+
+# -----------------------
+# Verify email
+# -----------------------
+class VerifyEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = VerifyEmailSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        user = serializer.save()
+        # Optionally create tokens upon verify:
         refresh = RefreshToken.for_user(user)
 
-        logger.info(f"Email verified: {user.email}")
+        logger.info(f"Email verified: {user.email} at {timezone.now()}")
 
-        return Response({
-            "message": "Email verified successfully!",
-            "access": str(refresh.access_token),
-            "refresh": str(refresh)
-        }, status=200)
+        return Response(
+            {
+                "message": "Email verified successfully.",
+                "email": user.email,
+                "verified": True,
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            },
+            status=status.HTTP_200_OK,
+        )
 
+
+# -----------------------
+# Token obtain (JWT) with login attempt lockout
+# Keep this if you still want the TokenObtainPairView flow
+# -----------------------
 @method_decorator(csrf_exempt, name="dispatch")
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -157,76 +186,63 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             return Response(
                 {
                     "detail": f"Too many login attempts. Try again in {LOCKOUT_TIME // 60} minutes.",
-                    "error": "account_locked"
+                    "error": "account_locked",
                 },
-                status=status.HTTP_429_TOO_MANY_REQUESTS
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
         try:
             response = super().post(request, *args, **kwargs)
-
+            # Successful: reset count
             cache.delete(cache_key)
             logger.info(f"User logged in: {email} at {timezone.now()}")
-            
             return response
-            
+
         except Exception as e:
-           
+            # increment attempts on failure
             cache.set(cache_key, attempts + 1, LOCKOUT_TIME)
             remaining_attempts = MAX_LOGIN_ATTEMPTS - (attempts + 1)
-            
             logger.warning(f"Failed login attempt for {email} at {timezone.now()}")
-            
             error_message = "Invalid email or password"
             if remaining_attempts > 0 and remaining_attempts <= 2:
                 error_message = f"Invalid email or password. {remaining_attempts} attempts remaining."
-            
+
             return Response(
-                {
-                    "detail": error_message,
-                    "error": "invalid_credentials",
-                    "attempts_remaining": max(0, remaining_attempts)
-                },
-                status=status.HTTP_400_BAD_REQUEST
+                {"detail": error_message, "error": "invalid_credentials", "attempts_remaining": max(0, remaining_attempts)},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-@method_decorator(csrf_exempt, name="dispatch")
-class ResendCodeView(APIView):  
+
+# -----------------------
+# Resend verification code (uses enhanced serializer, rate-limited)
+# -----------------------
+class ResendVerificationCodeView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get("email")
-        if not email:
-            return Response({"detail": "Email required"}, status=400)
+        serializer = ResendVerificationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        verification = serializer.save()
+        # send email
         try:
-            user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
-            return Response({"detail": "No user with that email"}, status=404)
+            send_verification_email_task.delay(verification.user.id, verification.id)
+        except Exception:
+            try:
+                send_verification_email(verification.user.email, verification.code)
+            except Exception as exc:
+                logger.exception("Failed to send resend verification email: %s", exc)
 
-        one_hour_ago = timezone.now() - timedelta(hours=1)
-        recent_count = EmailVerificationCode.objects.filter(
-            user=user, created_at__gte=one_hour_ago
-        ).count()
+        return Response(
+            {"message": "Verification code resent successfully.", "email": request.data.get("email"), "expires_in_minutes": 10},
+            status=status.HTTP_200_OK,
+        )
 
-        if recent_count >= MAX_OTP_REQUESTS_PER_HOUR:
-            return Response({"detail": "Too many requests, try later"}, status=429)
 
-        EmailVerificationCode.objects.filter(user=user).delete()
-        
-        code_obj = EmailVerificationCode.create_for_user(user)
-        code_obj.attempts = 0
-        code_obj.save(update_fields=["attempts"])
-
-        send_verification_email_task.delay(user.id, code_obj.id)
-
-        logger.info(f"Verification code resent to {user.email} at {timezone.now()}")
-
-        return Response({
-            "detail": "Verification code resent",
-            "wait": 30  
-        }, status=200)
-
+# -----------------------
+# Password reset: request + confirm
+# -----------------------
 class PasswordResetRequestView(APIView):
     permission_classes = [AllowAny]
 
@@ -238,43 +254,57 @@ class PasswordResetRequestView(APIView):
         try:
             user = CustomUser.objects.get(email=email)
         except CustomUser.DoesNotExist:
-            
-            return Response({"detail": "If this email exists, a reset code has been sent."}, status=200)
+            # Respond generically to avoid exposing user existence
+            return Response({"detail": "If this email exists, a reset code has been sent."}, status=status.HTTP_200_OK)
 
-        
+        # Remove old codes and create a new one
         EmailVerificationCode.objects.filter(user=user).delete()
-        
         code_obj = EmailVerificationCode.create_for_user(user)
-        
-        send_verification_email_task.delay(user.id, code_obj.id)
+
+        try:
+            send_verification_email_task.delay(user.id, code_obj.id)
+        except Exception:
+            try:
+                send_verification_email(user.email, code_obj.code)
+            except Exception as exc:
+                logger.exception("Failed to send password reset email: %s", exc)
 
         logger.info(f"Password reset requested for {user.email} at {timezone.now()}")
-        return Response({"detail": "Password reset code sent to your email."}, status=200)
+        return Response({"detail": "Password reset code sent to your email."}, status=status.HTTP_200_OK)
+
+
 class PasswordResetConfirmView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        logger.info(f"Password reset successfully for {serializer.validated_data['email']} at {timezone.now()}")
+        logger.info(f"Password reset successfully for {serializer.validated_data.get('email')} at {timezone.now()}")
         return Response({"message": "Password reset successfully"}, status=status.HTTP_200_OK)
 
 
+# -----------------------
+# User profile
+# -----------------------
 class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
-        return Response({
-            "id": user.id,
-            "email": user.email,
-            "name": user.name,
-            "email_verified": user.email_verified,
-            "is_premium": user.is_premium,
-            "trial_days_remaining": user.trial_days_remaining,
-            "subscription_active": user.subscription_active,
-            "subscription_due_date": user.subscription_due_date,
-        })
+        return Response(
+            {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "email_verified": user.email_verified,
+                "is_premium": user.is_premium,
+                "trial_days_remaining": user.trial_days_remaining,
+                "subscription_active": user.subscription_active,
+                "subscription_due_date": user.subscription_due_date,
+            }
+        )
 
     def patch(self, request):
         user = request.user
@@ -283,39 +313,25 @@ class UserProfileView(APIView):
             user.name = data["name"]
         if "email" in data and data["email"] != user.email:
             user.email = data["email"]
-            user.email_verified = False  
+            user.email_verified = False
         user.save()
-        return Response({
-            "id": user.id,
-            "email": user.email,
-            "name": user.name,
-            "email_verified": user.email_verified,
-            "is_premium": user.is_premium,
-            "trial_days_remaining": user.trial_days_remaining,
-        })
-    permission_classes = [AllowAny]
+        return Response(
+            {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "email_verified": user.email_verified,
+                "is_premium": user.is_premium,
+                "trial_days_remaining": user.trial_days_remaining,
+            }
+        )
 
-    def post(self, request):
-        serializer = PasswordResetRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        email = serializer.validated_data["email"]
 
-        try:
-            user = CustomUser.objects.get(email=email)
-        except CustomUser.DoesNotExist:
-            return Response({"detail": "If this email exists, a reset code has been sent."}, status=200)
-
-        EmailVerificationCode.objects.filter(user=user).delete()
-        
-        code_obj = EmailVerificationCode.create_for_user(user)
-        
-        send_verification_email_task.delay(user.id, code_obj.id)
-
-        logger.info(f"Password reset requested for {user.email} at {timezone.now()}")
-        return Response({"detail": "Password reset code sent to your email."}, status=200)
-    
+# -----------------------
+# Public user view
+# -----------------------
 class PublicUserView(generics.RetrieveAPIView):
-    permission_classes = []  
+    permission_classes = [AllowAny]
     serializer_class = PublicUserSerializer
 
     def get(self, request, user_id):

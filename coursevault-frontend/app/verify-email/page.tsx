@@ -3,63 +3,66 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/app/utils/api";
+import GlobalLoader from "@/app/components/LoadingSpinner";
+import SuccessDialog from "@/app/components/SuccessDialog";
 import { useAuth } from "@/src/context/AuthContext";
 
-export default function VerifyCodePage() {
+export default function VerifyEmailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
-
   const { login } = useAuth();
 
-  const [code, setCode] = useState("");
-  const [error, setError] = useState("");
+  const [code, setCode] = useState(Array(6).fill(""));
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Resend code
-  const [timer, setTimer] = useState(30);
-  const [resending, setResending] = useState(false);
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
-  const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
-
-  // Countdown timer
   useEffect(() => {
-    if (timer <= 0) return;
-    const interval = setInterval(() => setTimer((t) => t - 1), 1000);
-    return () => clearInterval(interval);
-  }, [timer]);
+    if (!email) router.push("/signup");
+  }, [email, router]);
 
-  // Handle input change
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
-    const val = e.target.value.replace(/\D/g, "");
-    if (val.length > 1) return;
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
 
-    const codeArr = code.split("");
-    while (codeArr.length < 6) codeArr.push("");
-    codeArr[idx] = val;
-    setCode(codeArr.join(""));
+  const handleChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
 
-    if (val && idx < 5) {
-      inputsRef.current[idx + 1]?.focus();
-    }
+    const newCode = [...code];
+    newCode[index] = value.slice(-1);
+    setCode(newCode);
+    setError("");
+
+    if (value && index < 5) inputRefs.current[index + 1]?.focus();
+    if (index === 5 && newCode.every((d) => d !== "")) handleVerify(newCode.join(""));
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, idx: number) => {
-    if (e.key === "Backspace" && !code[idx] && idx > 0) {
-      inputsRef.current[idx - 1]?.focus();
-    }
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !code[index] && index > 0) inputRefs.current[index - 1]?.focus();
   };
 
-  // SUBMIT CODE
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    const newCode = pasted.split("").concat(Array(6).fill("")).slice(0, 6);
+    setCode(newCode);
+    const lastFilled = Math.min(pasted.length, 5);
+    inputRefs.current[lastFilled]?.focus();
+    if (pasted.length === 6) handleVerify(pasted);
+  };
 
-    if (code.length !== 6) {
-      setError("Please enter the 6-digit code.");
-      return;
-    }
-    if (!email) {
-      setError("Email is missing. Please register again.");
+  const handleVerify = async (codeToVerify?: string) => {
+    const verificationCode = codeToVerify || code.join("");
+    if (verificationCode.length !== 6) {
+      setError("Please enter all 6 digits");
       return;
     }
 
@@ -67,97 +70,139 @@ export default function VerifyCodePage() {
     setError("");
 
     try {
-      
-      const res = await api.post("/auth/verify-email/", { email, code });
-      
-      
-      localStorage.setItem("access_token", res.data.access);
-      localStorage.setItem("refresh_token", res.data.refresh);
+      const res = await api.post("/auth/verify-email/", { email, code: verificationCode });
+      setSuccessMessage(res.data.message || "Email verified successfully!");
+      setShowSuccessDialog(true);
 
-      
-      router.push("/dashboard");
+      try {
+        await login(res.data.access); // Safe login
+      } catch {
+        // ignore login errors
+      }
+
+      setCode(Array(6).fill(""));
     } catch (err: any) {
-      console.error("Verification error:", err);
-      setError(err?.response?.data?.detail || err?.response?.data?.error || "Invalid code. Please try again.");
+      const msg =
+        err.response?.data?.non_field_errors?.[0] ||
+        err.response?.data?.error ||
+        err.response?.data?.detail ||
+        "Invalid verification code.";
+      setError(msg);
+      setCode(Array(6).fill(""));
+      inputRefs.current[0]?.focus();
     } finally {
       setLoading(false);
     }
   };
 
-  // RESEND CODE
-  const handleResend = async () => {
-    if (!email) return;
+  const handleResendCode = async () => {
+    if (resendCooldown > 0) return;
 
-    setResending(true);
+    setResendLoading(true);
+    setLoading(true);
     setError("");
 
     try {
-      await api.post("/auth/resend-code/", { email }); 
-      setTimer(30);
+      await api.post("/auth/resend-code/", { email });
+      setSuccessMessage("Verification code sent! Check your email.");
+      setResendCooldown(60);
+      setCode(Array(6).fill(""));
+      inputRefs.current[0]?.focus();
     } catch (err: any) {
-      console.error("Resend error:", err);
-      setError(err?.response?.data?.detail || "Could not resend the code. Try again later.");
+      const msg = err.response?.data?.email?.[0] || err.response?.data?.error || "Failed to resend code.";
+      setError(msg);
     } finally {
-      setResending(false);
+      setResendLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6">
-      <h1 className="text-2xl font-bold mb-6">Enter Verification Code</h1>
-      <p className="text-gray-600 mb-4 text-center">
-        We've sent a 6-digit code to <span className="font-semibold">{email}</span>
-      </p>
-
-      <form onSubmit={handleSubmit} className="flex flex-col items-center gap-4">
-        <div className="flex gap-2">
-          {[...Array(6)].map((_, idx) => (
-            <input
-              key={idx}
-              type="text"
-              inputMode="numeric"
-              maxLength={1}
-              ref={(el) => { inputsRef.current[idx] = el; }}
-              value={code[idx] || ""}
-              onChange={(e) => handleChange(e, idx)}
-              onKeyDown={(e) => handleKeyDown(e, idx)}
-              className="w-12 h-12 text-center border border-gray-300 rounded text-lg focus:outline-none focus:ring-2 focus:ring-black"
-              disabled={loading}
-            />
-          ))}
+    <>
+      {/* Loader only when loading or resending */}
+      {(loading || resendLoading) && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+          <GlobalLoader />
+          <p className="mt-4 text-white text-lg">{resendLoading ? "Resending..." : "Verifying..."}</p>
         </div>
+      )}
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded mt-2">
-            {error}
-          </div>
-        )}
+      <SuccessDialog
+        isOpen={showSuccessDialog}
+        onClose={() => setShowSuccessDialog(false)}
+        message={successMessage}
+      />
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-4 px-6 py-2 bg-black text-white rounded hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition"
-        >
-          {loading ? "Verifying..." : "Verify"}
-        </button>
+      <div className="min-h-screen flex items-center justify-center bg-white py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full space-y-8 bg-white border border-gray-200 p-8 rounded-xl shadow-lg">
+          <h2 className="text-center text-3xl font-bold text-black">Verify Your Email</h2>
+          <p className="mt-2 text-center text-sm text-gray-700">We sent a 6-digit code to</p>
+          <p className="text-center text-sm font-semibold text-black">{email}</p>
 
-        <div className="mt-4 text-center">
-          {timer > 0 ? (
-            <p className="text-gray-500">
-              Didn't get the code? Resend in <span className="font-semibold">{timer}s</span>
-            </p>
-          ) : (
-            <button
-              type="button"
-              className="text-blue-600 font-semibold disabled:opacity-50 hover:underline"
-              disabled={resending}
-              onClick={handleResend}
-            >
-              {resending ? "Sending..." : "Resend Code"}
-            </button>
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-300 rounded-lg text-red-700 text-center">
+              {error}
+            </div>
           )}
+
+          {successMessage && !showSuccessDialog && (
+            <div className="p-4 bg-green-50 border border-green-300 rounded-lg text-green-700 text-center">
+              {successMessage}
+            </div>
+          )}
+
+          <div className="flex justify-center gap-2 mt-6">
+            {code.map((digit, idx) => (
+              <input
+                key={idx}
+                ref={(el) => {
+  inputRefs.current[idx] = el;
+}}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handleChange(idx, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(idx, e)}
+                onPaste={idx === 0 ? handlePaste : undefined}
+                className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-black outline-none"
+                disabled={loading || resendLoading}
+              />
+            ))}
+          </div>
+
+          <button
+            onClick={() => handleVerify()}
+            disabled={loading || resendLoading || code.some((d) => !d)}
+            className="w-full mt-4 py-3 px-4 rounded-lg bg-black text-white font-medium hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+          >
+            {loading ? "Verifying..." : "Verify Email"}
+          </button>
+
+          <div className="text-center mt-4">
+            <p className="text-sm text-gray-700">
+              Didn’t receive the code?{" "}
+              <button
+                onClick={handleResendCode}
+                disabled={resendLoading || resendCooldown > 0}
+                className="font-medium text-black underline disabled:text-gray-400"
+              >
+                {resendLoading ? "Sending..." : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}
+              </button>
+            </p>
+          </div>
+
+          <div className="text-center mt-2">
+            <button onClick={() => router.push("/signup")} className="text-sm text-gray-700 hover:text-black">
+              ← Back to Signup
+            </button>
+          </div>
+
+          <div className="mt-6 p-4 bg-gray-100 border border-gray-200 rounded-lg text-center text-xs text-gray-700">
+            Code expires in 10 minutes. Check your spam folder if you don’t see the email.
+          </div>
         </div>
-      </form>
-    </div>
+      </div>
+    </>
   );
 }

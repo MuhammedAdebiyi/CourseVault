@@ -1,25 +1,61 @@
 "use client";
-import React from "react";
 
-interface Props {
-  title: string;
-  description?: string;
-  onClose?: () => void;
-}
+import { Fragment } from "react";
+import { Dialog, Transition } from "@headlessui/react";
 
-export default function SuccessDialog({ title, description, onClose }: Props) {
+type SuccessDialogProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  message: string;
+};
+
+export default function SuccessDialog({ isOpen, onClose, message }: SuccessDialogProps) {
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-      <div className="bg-white rounded-lg p-6 shadow-lg w-80 text-center">
-        <h2 className="text-xl font-bold mb-2 text-green-600">{title}</h2>
-        {description && <p className="text-gray-700 mb-4">{description}</p>}
-        <button
-          onClick={onClose}
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+    <Transition.Root show={isOpen} as={Fragment}>
+      <Dialog as="div" className="relative z-50" onClose={onClose}>
+        <Transition.Child
+          as={Fragment}
+          enter="ease-out duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
         >
-          Close
-        </button>
-      </div>
-    </div>
+          <div className="fixed inset-0 bg-black bg-opacity-30 transition-opacity" />
+        </Transition.Child>
+
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4 text-center">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left shadow-xl transition-all">
+                <Dialog.Title className="text-lg font-medium text-gray-900 text-center">
+                  Success
+                </Dialog.Title>
+                <div className="mt-4 text-center text-gray-700">
+                  {message}
+                </div>
+                <div className="mt-6 flex justify-center">
+                  <button
+                    onClick={onClose}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                  >
+                    OK
+                  </button>
+                </div>
+              </Dialog.Panel>
+            </Transition.Child>
+          </div>
+        </div>
+      </Dialog>
+    </Transition.Root>
   );
 }

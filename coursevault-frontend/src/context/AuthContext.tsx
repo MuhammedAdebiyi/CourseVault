@@ -12,6 +12,8 @@ type User = {
   is_premium?: boolean;
   created_at: string;
   is_subscribed?: boolean;
+  trial_days_remaining?: number;
+  subscription_active?: boolean;
 };
 
 type LoginResponse = {
@@ -24,7 +26,7 @@ type LoginResponse = {
 type AuthContextType = {
   user: User | null;
   loadingUser: boolean;
-  login: (email: string, password: string) => Promise<LoginResponse>;
+  login: (emailOrToken: string, password?: string) => Promise<LoginResponse>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 };
@@ -56,14 +58,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .get("/auth/me/")
       .then((res) => {
         setUser(res.data);
-        if (checkSubscription(res.data)) {
-          router.push("/pricing");
-        }
+        if (checkSubscription(res.data)) router.push("/pricing");
       })
-      .catch((err) => {
-        console.error("Failed to load user:", err);
-        logout();
-      })
+      .catch(() => logout())
       .finally(() => setLoadingUser(false));
   }, []);
 
@@ -75,34 +72,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       api
         .post("/auth/token/refresh/", { refresh })
-        .then((res) => {
-          localStorage.setItem("access_token", res.data.access);
-        })
-        .catch(() => {
-          console.error("Token refresh failed");
-          logout();
-        });
+        .then((res) => localStorage.setItem("access_token", res.data.access))
+        .catch(() => logout());
     }, 1000 * 60 * 10);
 
     return () => clearInterval(interval);
   }, []);
 
-  const login = async (email: string, password: string): Promise<LoginResponse> => {
+  const login = async (emailOrToken: string, password?: string): Promise<LoginResponse> => {
     setLoadingUser(true);
-    
     try {
-      // Call the token endpoint
-      const res = await api.post("/auth/token/", { email, password });
-      
-      // Store tokens
-      localStorage.setItem("access_token", res.data.access);
-      localStorage.setItem("refresh_token", res.data.refresh);
+      if (password) {
+        const res = await api.post("/auth/token/", { email: emailOrToken, password });
+        localStorage.setItem("access_token", res.data.access);
+        localStorage.setItem("refresh_token", res.data.refresh);
+      } else {
+        // Login with access token only
+        localStorage.setItem("access_token", emailOrToken);
+      }
 
-      // Fetch user data
       const userRes = await api.get("/auth/me/");
       setUser(userRes.data);
 
-      // Check if user needs to pay (trial expired and no subscription)
       if (userRes.data.trial_days_remaining === 0 && !userRes.data.subscription_active) {
         router.push("/pricing");
       } else {
@@ -110,46 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { success: true };
-      
     } catch (error: any) {
-      console.error("Login error:", error);
-      
-      // Extract error details from response
       const errorData = error.response?.data;
-      const statusCode = error.response?.status;
-      
-      let message = "Something went wrong. Please try again.";
-      let errorType = "unknown";
-      let attemptsRemaining = undefined;
-      
-      if (errorData) {
-        // Handle different error formats
-        message = errorData.detail || errorData.error || errorData.message || message;
-        errorType = errorData.error || "error";
-        attemptsRemaining = errorData.attempts_remaining;
-      }
-      
-      // Handle specific status codes
-      if (statusCode === 429) {
-        message = errorData?.detail || "Too many login attempts. Please try again later.";
-        errorType = "rate_limited";
-      } else if (statusCode === 400 || statusCode === 401) {
-        // Invalid credentials
-        if (!errorData?.detail) {
-          message = "Invalid email or password";
-        }
-      } else if (statusCode === 500) {
-        message = "Server error. Please try again later.";
-        errorType = "server_error";
-      }
-      
-      return { 
-        success: false, 
-        message,
-        error: errorType,
-        attempts_remaining: attemptsRemaining
+      return {
+        success: false,
+        message: errorData?.detail || errorData?.error || "Something went wrong",
+        error: errorData?.error || "unknown",
+        attempts_remaining: errorData?.attempts_remaining,
       };
-      
     } finally {
       setLoadingUser(false);
     }
@@ -166,8 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api.get("/auth/me/");
       setUser(res.data);
-    } catch (error) {
-      console.error("Failed to refresh user:", error);
+    } catch {
+      console.error("Failed to refresh user");
     }
   };
 

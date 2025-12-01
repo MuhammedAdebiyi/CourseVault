@@ -27,6 +27,9 @@ from django.db.models import Q
 import boto3
 import logging
 from django.db.models import Q
+from django.db import IntegrityError
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from datetime import timedelta
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -78,7 +81,7 @@ class FolderViewSet(viewsets.ModelViewSet):
     """CRUD operations for folders"""
     permission_classes = [IsAuthenticated]
     serializer_class = FolderSerializer
-    queryset = Folder.objects.all()  # ✅ ADD THIS - Required for router!
+    queryset = Folder.objects.all()  
     
     def get_serializer_class(self):
         if self.action == 'list':
@@ -105,11 +108,11 @@ class FolderViewSet(viewsets.ModelViewSet):
         return folder
     
     def perform_create(self, serializer):
-        """✅ Create folder with current user as owner"""
+        
         serializer.save(owner=self.request.user)
     
     def destroy(self, request, *args, **kwargs):
-        """✅ SOFT DELETE - Move folder to trash"""
+        
         folder = self.get_object()
         
         # Recursive function to soft delete all subfolders
@@ -153,7 +156,7 @@ class PDFViewSet(viewsets.ModelViewSet):
     """CRUD operations for PDF files"""
     serializer_class = PDFSerializer
     permission_classes = [IsAuthenticated]
-    queryset = PDF.objects.all()  # ✅ ADD THIS - Required for router!
+    queryset = PDF.objects.all() 
     
     def get_queryset(self):
         """Only show NON-DELETED files from user's folders"""
@@ -623,14 +626,19 @@ def trending_folders(request):
     serializer = FolderListSerializer(folders, many=True, context={'request': request})
     return Response(serializer.data)
 
-from django.db.models.signals import post_save
-from django.dispatch import receiver
+
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
-  
-    if created:
-        UserProfile.objects.create(user=instance)
+    
+    if not created:
+        return
+
+    try:
+        UserProfile.objects.get_or_create(user=instance)
+    except IntegrityError as exc:
+        # Someone else may have created it concurrently — log and continue.
+        logger.exception("IntegrityError while creating UserProfile for %s: %s", instance.id, exc)
 
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):

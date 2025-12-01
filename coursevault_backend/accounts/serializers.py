@@ -30,19 +30,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         email = value.lower().strip()
         existing_user = CustomUser.objects.filter(email=email).first()
 
-        if existing_user:
-            if existing_user.email_verified:
-                raise serializers.ValidationError(
-                    "This email is already registered. Please login."
-                )
-            else:
-                # User exists but is NOT verified
-                return serializers.ValidationError({
-                    "error_type": "unverified_email",
-                    "message": "This email is already registered but not verified. Please verify your email.",
-                    "email": email
-                })
-
+        if existing_user and existing_user.email_verified:
+            raise serializers.ValidationError(
+                "This email is already registered. Please login."
+            )
+        # Don't raise error for unverified users - let view handle it
+        
         return email
 
     def validate(self, data):
@@ -173,7 +166,7 @@ class ResendVerificationSerializer(serializers.Serializer):
         cache.set(cache_key, resend_count + 1, timeout=3600)
 
         logger.info(f"Resent verification code to {email} → {code.code}")
-        return {"message": "Verification code resent."}
+        return code
 
 
 # ===============================================================

@@ -84,6 +84,7 @@ class CustomerDashboardView(APIView):
         )
 
 
+
 # -----------------------
 # Registration (uses enhanced RegisterSerializer)
 # -----------------------
@@ -91,52 +92,47 @@ class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        email = request.data.get("email", "").lower().strip()
+        
+        # CHECK UNVERIFIED USER FIRST - BEFORE SERIALIZER
+        existing_user = CustomUser.objects.filter(email=email).first()
+        
+        if existing_user and not existing_user.email_verified:
+            # User exists but not verified - return special response
+            return Response({
+                "error_type": "unverified_email",
+                "message": "This email is already registered but not verified. Please verify your email.",
+                "email": email,
+                "requires_verification": True
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Normal registration flow
         serializer = RegisterSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = serializer.save()
 
-        try:
-            serializer.is_valid(raise_exception=True)
-            user = serializer.save()
-
-            # send verification email async if you have a task
-            code_obj = EmailVerificationCode.objects.filter(user=user).order_by("-created_at").first()
-            if code_obj:
+        # Send verification email async if you have a task
+        code_obj = EmailVerificationCode.objects.filter(user=user).order_by("-created_at").first()
+        if code_obj:
+            try:
+                send_verification_email_task.delay(user.id, code_obj.id)
+            except Exception:
+                # fallback to direct send (optional)
                 try:
-                    send_verification_email_task.delay(user.id, code_obj.id)
-                except Exception:
-                    # fallback to direct send (optional)
-                    try:
-                        send_verification_email(user.email, code_obj.code)
-                    except Exception as exc:
-                        logger.exception("Failed sending verification email: %s", exc)
+                    send_verification_email(user.email, code_obj.code)
+                except Exception as exc:
+                    logger.exception("Failed sending verification email: %s", exc)
 
-            logger.info(f"User registered: {user.email} at {timezone.now()}")
+        logger.info(f"User registered: {user.email} at {timezone.now()}")
 
-            return Response(
-                {
-                    "message": "Registration successful. Verification code sent.",
-                    "email": user.email,
-                    "requires_verification": True,
-                },
-                status=status.HTTP_201_CREATED,
-            )
-
-        except Exception as e:
-            # Detect structured unverified-email error raised by serializer
-            if hasattr(e, "detail") and isinstance(e.detail, dict):
-                email_error = e.detail.get("email")
-                if isinstance(email_error, dict) and email_error.get("error_type") == "unverified_email":
-                    return Response(
-                        {
-                            "error_type": "unverified_email",
-                            "message": email_error["message"],
-                            "email": email_error["email"],
-                            "requires_verification": True,
-                        },
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-
-            return Response(serializer.errors if hasattr(serializer, "errors") else {"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
+        return Response({
+            "message": "Registration successful! Please check your email for verification code.",
+            "email": user.email,
+            "requires_verification": True
+        }, status=status.HTTP_201_CREATED)
 
 # -----------------------
 # Verify email

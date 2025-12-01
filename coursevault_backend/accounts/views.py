@@ -48,20 +48,32 @@ class CustomerDashboardView(APIView):
 
     def get(self, request):
         user = request.user
-        folders = Folder.objects.filter(owner=user, parent__isnull=True)
+        folders = Folder.objects.filter(
+            owner=user, 
+            parent__isnull=True,
+            deleted_at__isnull=True  
+        )
         folder_data = [
             {
                 "id": f.id,
                 "title": f.title,
                 "slug": f.slug,
-                "files_count": f.pdfs.count(),
+                "files_count": f.pdfs.filter(deleted_at__isnull=True).count(),  # Also filter deleted PDFs
                 "last_updated": f.updated_at.isoformat() if hasattr(f, "updated_at") else None,
             }
             for f in folders
         ]
 
-        total_pdfs = PDF.objects.filter(folder__owner=user).count()
-        total_folders = Folder.objects.filter(owner=user).count()
+        # Also filter deleted items in stats
+        total_pdfs = PDF.objects.filter(
+            folder__owner=user,
+            deleted_at__isnull=True 
+        ).count()
+        
+        total_folders = Folder.objects.filter(
+            owner=user,
+            deleted_at__isnull=True  
+        ).count()
 
         subscription_status = "Expired"
         if getattr(user, "subscription_expires_at", None):

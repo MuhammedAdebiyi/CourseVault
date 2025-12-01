@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import Sidebar from "@/app/components/SideBar";
+import { useParams, useRouter } from "next/navigation";
 import FolderCard from "@/app/components/FolderCard";
 import FileItem from "@/app/components/FileItem";
 import UploadFile from "@/app/components/UploadFile";
@@ -28,12 +27,12 @@ export interface Folder {
   title?: string;
   parentId?: number | null;
   children?: Folder[];
-  files?: File[];
+  pdfs?: File[]; 
 }
-
 
 export default function FolderDetail() {
   const params = useParams();
+  const router = useRouter();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const [loading, setLoading] = useState(true);
   const [folder, setFolder] = useState<Folder | null>(null);
@@ -50,30 +49,34 @@ export default function FolderDetail() {
       if (!id) return;
       try {
         const res = await api.get<Folder>(`/folders/${id}/`);
+        console.log("Fetched folder:", res.data); // Debug log
         setFolder(res.data);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to fetch folder:", err);
-        setFolder(null);
+        if (err.response?.status === 404) {
+          router.replace("/dashboard");
+        } else {
+          setFolder(null);
+        }
       } finally {
         setLoading(false);
       }
     }
     fetchFolder();
-  }, [id]);
+  }, [id, router]);
 
   if (loading) return <LoadingSpinner />;
-  if (!folder) return <div className="p-4 text-red-500">Folder not found</div>;
+  if (!folder) return null;
 
-  // Destructure with defaults
-  const { children = [], files = [] } = folder;
+  const { children = [], pdfs = [] } = folder; // Changed files to pdfs
   const folderName = folder.name || folder.title || "Untitled";
 
   // Create subfolder
   const handleCreate = async (payload: { name: string; parentId?: number | null }) => {
     try {
       const body = {
-        title: payload.name,  
-        parent: Number(id),   
+        title: payload.name,
+        parent: Number(id),
       };
       const { data } = await api.post("/folders/", body);
       setFolder(prev => prev ? { ...prev, children: [data, ...(prev.children ?? [])] } : prev);
@@ -84,30 +87,48 @@ export default function FolderDetail() {
     }
   };
 
-  
-  const handleFileUploaded = (file: File) => {
-    setFolder(prev => prev ? { ...prev, files: [file, ...prev.files ?? []] } : prev);
+  // Handle uploaded file
+  const handleFileUploaded = (uploadedFile: any) => {
+    console.log("File uploaded:", uploadedFile);
+    
+    const newFile: File = {
+      id: uploadedFile.id,
+      title: uploadedFile.title,
+      uploaded_at: uploadedFile.uploaded_at ?? new Date().toISOString(),
+      file: uploadedFile.file,
+    };
+
+    setFolder(prev => {
+      if (!prev) return prev;
+      
+      const updatedFolder = {
+        ...prev,
+        pdfs: [newFile, ...(prev.pdfs ?? [])] // Changed files to pdfs
+      };
+      
+      console.log("Updated folder:", updatedFolder);
+      return updatedFolder;
+    });
   };
 
-  
+  // Delete file
   const handleDeleteFile = async (fileId: number) => {
     if (!confirm("Delete this file?")) return;
-    
+
     try {
-      
       await api.delete(`/folders/pdfs/${fileId}/`);
-      setFolder(prev => prev ? { ...prev, files: prev.files?.filter(f => f.id !== fileId) } : prev);
+      setFolder(prev => prev ? { ...prev, pdfs: prev.pdfs?.filter(f => f.id !== fileId) } : prev);
     } catch (err: any) {
       console.error("Failed to delete file:", err);
       alert(err.response?.data?.detail || "Failed to delete file");
     }
   };
 
-  
+  // Move file
   const handleMoveFile = async (fileId: number, targetFolderId: number) => {
     try {
       await api.post(`/folders/pdfs/${fileId}/move/`, { folder: targetFolderId });
-      setFolder(prev => prev ? { ...prev, files: prev.files?.filter(f => f.id !== fileId) } : prev);
+      setFolder(prev => prev ? { ...prev, pdfs: prev.pdfs?.filter(f => f.id !== fileId) } : prev);
       setMoveOpen(false);
     } catch (err: any) {
       console.error("Failed to move file:", err);
@@ -115,17 +136,13 @@ export default function FolderDetail() {
     }
   };
 
-  
+  // Delete subfolder
   const handleDeleteSubfolder = (subfolderId: number) => {
-    setFolder(prev => prev ? {
-      ...prev,
-      children: prev.children?.filter(child => child.id !== subfolderId)
-    } : prev);
+    setFolder(prev => prev ? { ...prev, children: prev.children?.filter(child => child.id !== subfolderId) } : prev);
   };
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar foldersCount={0} activePage="folders" />
       <main className="flex-1 p-6">
         <Breadcrumbs crumbs={[{ label: "Folders", href: "/folders" }, { label: folderName }]} />
 
@@ -148,10 +165,7 @@ export default function FolderDetail() {
             {children.length > 0
               ? children.map(c => (
                   <motion.div key={c.id} layout whileHover={{ scale: 1.03 }}>
-                    <FolderCard 
-                      folder={c} 
-                      onDelete={handleDeleteSubfolder}
-                    />
+                    <FolderCard folder={c} onDelete={handleDeleteSubfolder} />
                   </motion.div>
                 ))
               : <div className="text-gray-500 col-span-4 text-center py-8">No subfolders yet</div>
@@ -167,11 +181,11 @@ export default function FolderDetail() {
 
         {/* Files */}
         <section>
-          <h2 className="text-lg font-semibold mb-3">Files ({files.length})</h2>
-          {files.length > 0
+          <h2 className="text-lg font-semibold mb-3">Files ({pdfs.length})</h2>
+          {pdfs.length > 0
             ? (
               <motion.div layout className="bg-white rounded-xl shadow divide-y">
-                {files.map(file => (
+                {pdfs.map(file => (
                   <motion.div key={file.id} layout whileHover={{ scale: 1.01 }}>
                     <FileItem
                       file={file}
@@ -202,16 +216,12 @@ export default function FolderDetail() {
         onCancel={() => setConfirmOpen(false)}
       />
       <MoveFileModal
-  open={moveOpen}
-  onClose={() => setMoveOpen(false)}
-  folders={children.map(f => ({
-    ...f,
-    name: f.name ?? "Untitled", 
-  }))}
-  onMove={(fid, fid2) => handleMoveFile(fid, Number(fid2))}
-  fileId={selectedFileToMove ?? 0}
-/>
-
+        open={moveOpen}
+        onClose={() => setMoveOpen(false)}
+        folders={children.map(f => ({ ...f, name: f.name ?? "Untitled" }))}
+        onMove={(fid, fid2) => handleMoveFile(fid, Number(fid2))}
+        fileId={selectedFileToMove ?? 0}
+      />
     </div>
   );
 }

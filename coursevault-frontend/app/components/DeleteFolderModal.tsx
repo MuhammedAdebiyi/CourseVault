@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import api from "../utils/api";
 
 interface Props {
@@ -9,15 +10,16 @@ interface Props {
 }
 
 export default function DeleteFolderModal({ folder, onClose, onDelete }: Props) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const handleDelete = async () => {
     setLoading(true);
     try {
-      
       await api.delete(`/folders/${folder.id}/`); 
       onDelete(folder.id); 
       onClose();
+      router.refresh(); // Refresh to update the page
     } catch (err: any) {
       console.error("Delete error:", err);
       alert(err.response?.data?.detail || "Failed to delete folder");

@@ -288,19 +288,19 @@ export default function DashboardPage() {
       )}
 
       {uploadModalOpen && (
-        <UploadPDFModal
-          folder={uploadModalOpen}
-          onClose={() => setUploadModalOpen(null)}
-          onPDFUploaded={(folderId, pdf) => {
-            setFolders((prev) =>
-              prev.map((f) =>
-                f.id === folderId ? { ...f, files_count: f.files_count + 1 } : f
-              )
-            );
-            setUploadModalOpen(null);
-          }}
-        />
-      )}
+  <UploadPDFModal
+    folder={uploadModalOpen}
+    onClose={() => setUploadModalOpen(null)}
+    onPDFUploaded={(folderId: number, pdf: any) => {
+      setFolders((prev) =>
+        prev.map((f) =>
+          f.id === folderId ? { ...f, files_count: f.files_count + 1 } : f
+        )
+      );
+      setUploadModalOpen(null);
+    }}
+  />
+)}
     </main>
   );
 }

@@ -1,10 +1,7 @@
 from django.apps import AppConfig
 
-
 class FoldersConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'folders'
-    
+    name = "folders"
+
     def ready(self):
-        """Import signals when app is ready"""
-        import folders.signals  
+        import folders.signals

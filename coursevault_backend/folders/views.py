@@ -637,7 +637,7 @@ def create_user_profile(sender, instance, created, **kwargs):
     try:
         UserProfile.objects.get_or_create(user=instance)
     except IntegrityError as exc:
-        # Someone else may have created it concurrently — log and continue.
+        
         logger.exception("IntegrityError while creating UserProfile for %s: %s", instance.id, exc)
 
 @receiver(post_save, sender=User)
@@ -647,8 +647,7 @@ def save_user_profile(sender, instance, **kwargs):
         instance.profile.save()
 
 
-# ✅ PDF TEXT EXTRACTION
-# ==========================================
+#  PDF TEXT EXTRACTION
 
 @api_view(['POST'])
 def extract_pdf_text(request, pdf_id):

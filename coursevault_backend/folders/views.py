@@ -704,7 +704,7 @@ def extract_pdf_text(request, pdf_id):
 @api_view(['GET'])
 def search_pdf_content(request):
     """
-    ✅ SEARCH INSIDE PDF CONTENT
+    SEARCH INSIDE PDF CONTENT
     Query param: q (search query)
     """
     user = request.user
@@ -771,9 +771,7 @@ def search_pdf_content(request):
     })
 
 
-# ==========================================
-# ✅ AI QUIZ GENERATION
-# ==========================================
+#  AI QUIZ GENERATION
 
 @api_view(['POST'])
 def generate_quiz(request, pdf_id):
@@ -938,9 +936,8 @@ def submit_quiz(request, pdf_id):
     })
 
 
-# ==========================================
-# ✅ AI SUMMARY & FLASHCARDS
-# ==========================================
+
+#  AI SUMMARY & FLASHCARDS
 
 @api_view(['POST'])
 def generate_summary(request, pdf_id):

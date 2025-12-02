@@ -26,7 +26,7 @@ export default function RecentFiles() {
   const fetchRecentFiles = async () => {
     setLoading(true);
     try {
-      const response = await api.get(`/folders/recent/?type=${viewType}`);
+      const response = await api.get(`/folders/recent-files/?type=${viewType}`);
       setRecentFiles(response.data || []);
     } catch (error) {
       console.error("Failed to fetch recent files:", error);

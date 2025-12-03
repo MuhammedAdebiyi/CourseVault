@@ -32,6 +32,8 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from datetime import timedelta
 from django.contrib.auth import get_user_model
+from ai.quiz import generate_quiz_questions_with_ai
+from django.db.models import Prefetch
 User = get_user_model()
 
 
@@ -94,6 +96,8 @@ class FolderViewSet(viewsets.ModelViewSet):
             owner=self.request.user, 
             parent__isnull=True,
             deleted_at__isnull=True
+        ).prefetch_related(
+            Prefetch('pdfs', queryset=PDF.objects.filter(deleted_at__isnull=True))
         ).order_by('-updated_at')
     
     def get_object(self):
@@ -777,16 +781,16 @@ def search_pdf_content(request):
 def generate_quiz(request, pdf_id):
     """
     Generate quiz questions from PDF using AI
-    Body: { "num_questions": 5 }
+    Body: { "num_questions": 5, "types": ["objective","theory"] }
     """
     user = request.user
     pdf = get_object_or_404(PDF, id=pdf_id, folder__owner=user, deleted_at__isnull=True)
     
     num_questions = request.data.get('num_questions', 5)
-    
-    # Check if text is extracted
+    types = request.data.get('types', ['objective'])  # default to objective
+
+    # Extract text if needed
     if pdf.text_extraction_status != 'completed' or not pdf.extracted_text:
-        # Extract text first
         result = extract_text_from_pdf(pdf.file)
         if result['success']:
             pdf.extracted_text = result['text']
@@ -794,10 +798,8 @@ def generate_quiz(request, pdf_id):
             pdf.text_extraction_status = 'completed'
             pdf.save()
         else:
-            return Response({
-                'error': 'Failed to extract PDF text'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
+            return Response({'error': 'Failed to extract PDF text'}, status=500)
+
     # Check if questions already exist
     existing_questions = AIGeneratedQuestion.objects.filter(pdf=pdf)
     if existing_questions.exists():
@@ -811,50 +813,50 @@ def generate_quiz(request, pdf_id):
                     'options': q.options,
                     'correct_answer': q.correct_answer,
                     'explanation': q.explanation,
-                    'difficulty': q.difficulty
+                    'difficulty': q.difficulty,
+                    'type': q.type,
                 }
                 for q in existing_questions
             ]
         })
-    
-    # Generate questions using AI
+
+    created_questions = []
     try:
-        questions_data = generate_quiz_questions_with_ai(pdf.extracted_text, num_questions)
-        
-        # Save to database
-        created_questions = []
-        for q_data in questions_data:
-            question = AIGeneratedQuestion.objects.create(
-                pdf=pdf,
-                question=q_data['question'],
-                options=q_data['options'],
-                correct_answer=q_data['correct_answer'],
-                explanation=q_data.get('explanation', ''),
-                difficulty=q_data.get('difficulty', 'medium'),
-                source_text=q_data.get('source_text', '')
-            )
-            created_questions.append(question)
-        
-        return Response({
-            'message': f'Generated {len(created_questions)} questions',
-            'count': len(created_questions),
-            'questions': [
-                {
-                    'id': q.id,
-                    'question': q.question,
-                    'options': q.options,
-                    'correct_answer': q.correct_answer,
-                    'explanation': q.explanation,
-                    'difficulty': q.difficulty
-                }
-                for q in created_questions
-            ]
-        }, status=status.HTTP_201_CREATED)
-    
+        for q_type in types:
+            # generate num_questions for each type
+            questions_data = generate_quiz_questions_with_ai(pdf.extracted_text, num_questions, question_type=q_type)
+            for q_data in questions_data:
+                question = AIGeneratedQuestion.objects.create(
+                    pdf=pdf,
+                    question=q_data['question'],
+                    options=q_data['options'],
+                    correct_answer=q_data['correct_answer'],
+                    explanation=q_data.get('explanation', ''),
+                    difficulty=q_data.get('difficulty', 'medium'),
+                    source_text=q_data.get('source_text', ''),
+                    type=q_type
+                )
+                created_questions.append(question)
     except Exception as e:
-        return Response({
-            'error': f'Failed to generate questions: {str(e)}'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'error': f'Failed to generate questions: {str(e)}'}, status=500)
+
+    return Response({
+        'message': f'Generated {len(created_questions)} questions',
+        'count': len(created_questions),
+        'questions': [
+            {
+                'id': q.id,
+                'question': q.question,
+                'options': q.options,
+                'correct_answer': q.correct_answer,
+                'explanation': q.explanation,
+                'difficulty': q.difficulty,
+                'type': q.type,
+            }
+            for q in created_questions
+        ]
+    }, status=201)
+
 
 
 @api_view(['GET'])

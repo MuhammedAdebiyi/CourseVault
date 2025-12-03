@@ -1,9 +1,14 @@
 """
 Django settings for coursevault_backend project.
 """
-
+import os 
 from pathlib import Path
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 

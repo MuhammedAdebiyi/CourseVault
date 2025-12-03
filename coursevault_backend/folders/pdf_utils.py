@@ -148,7 +148,7 @@ IMPORTANT: Return ONLY the JSON array, no other text."""
         return []
 
 
-def generate_summary_with_ai(pdf_text: str) -> str:
+def generate_summary_with_ai(text):
     """
     ✅ GENERATE PDF SUMMARY USING CLAUDE
     """

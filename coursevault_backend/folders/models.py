@@ -59,6 +59,10 @@ class Folder(models.Model):
         self.deleted_at = None
         self.save()
     
+    @ property
+    def pdf_count(self):
+        return self.pdfs.filter(deleted_at___isnull=True).count()
+
     @property
     def is_deleted(self):
         return self.deleted_at is not None
@@ -169,13 +173,10 @@ class PDF(models.Model):
 
 
 class AIGeneratedQuestion(models.Model):
-    """
-    ✅ AI-GENERATED QUIZ QUESTIONS from PDF content
-    """
     pdf = models.ForeignKey(PDF, related_name='ai_questions', on_delete=models.CASCADE)
     question = models.TextField()
-    options = models.JSONField()  # {"A": "...", "B": "...", "C": "...", "D": "..."}
-    correct_answer = models.CharField(max_length=1)  # "A", "B", "C", or "D"
+    options = models.JSONField()
+    correct_answer = models.CharField(max_length=1)
     explanation = models.TextField(blank=True)
     difficulty = models.CharField(
         max_length=10,
@@ -187,18 +188,26 @@ class AIGeneratedQuestion(models.Model):
         default='medium'
     )
     
-    # Source
+
+    type = models.CharField(
+        max_length=20,
+        choices=[
+            ('theory', 'Theory'),
+            ('objective', 'Objective'),
+        ],
+        default='objective'
+    )
+    
     source_page = models.IntegerField(null=True, blank=True)
     source_text = models.TextField(blank=True)
-    
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['pdf', '-created_at']),
         ]
-    
+
     def __str__(self):
         return f"Q: {self.question[:50]}..."
 
@@ -246,7 +255,7 @@ class UserProfile(models.Model):
     # Settings
     is_profile_public = models.BooleanField(default=True)
     
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)    
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:

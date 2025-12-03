@@ -39,7 +39,6 @@ urlpatterns = [
     path('discover/folders/', views.public_folders, name='public-folders'),
     path('discover/trending/', views.trending_folders, name='trending-folders'),
     path('discover/profiles/', views.discover_profiles, name='discover-profiles'),
-    path('<int:folder_id>/toggle-public/', views.toggle_folder_public, name='toggle-public'),
     
     # ==========================================
     # USER PROFILES
@@ -56,11 +55,12 @@ urlpatterns = [
     path('library/remove/<int:folder_id>/', views.remove_from_library, name='remove-from-library'),
     
     # ==========================================
-    # SEARCH & RECENT
+    # SEARCH & RECENT - FIX THESE NAMES
     # ==========================================
     
-    path('search/', views.search_files, name='search-files'),
-    path('recent/', views.recent_files, name='recent-files'),
+    path('search-files/', views.search_files, name='search-files'),  # Changed from 'search/'
+    path('recent-files/', views.recent_files, name='recent-files'),  # Changed from 'recent/'
+    path('search-pdf-content/', views.search_pdf_content, name='search-content'),  # Added this
     
     # ==========================================
     # TRASH
@@ -82,7 +82,6 @@ urlpatterns = [
     # ==========================================
     
     path('pdfs/<int:pdf_id>/extract-text/', views.extract_pdf_text, name='extract-text'),
-    path('search/content/', views.search_pdf_content, name='search-content'),
     
     path('pdfs/<int:pdf_id>/generate-quiz/', views.generate_quiz, name='generate-quiz'),
     path('pdfs/<int:pdf_id>/quiz/', views.get_quiz, name='get-quiz'),

@@ -12,12 +12,12 @@ logger = logging.getLogger("accounts")
 # Limits
 MAX_ATTEMPTS = 5
 MAX_LOGIN_ATTEMPTS = 5
-LOCKOUT_TIME = 15 * 60  # 15 mins lockout
+LOCKOUT_TIME = 15 * 60  
 
 
-# ===============================================================
+
 # REGISTER
-# ===============================================================
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True)
@@ -34,7 +34,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "This email is already registered. Please login."
             )
-        # Don't raise error for unverified users - let view handle it
+        
         
         return email
 
@@ -67,9 +67,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
-# ===============================================================
+
 # VERIFY EMAIL
-# ===============================================================
+
 class VerifyEmailSerializer(serializers.Serializer):
     email = serializers.EmailField()
     code = serializers.CharField(max_length=6, min_length=6)
@@ -126,9 +126,9 @@ class VerifyEmailSerializer(serializers.Serializer):
         return user
 
 
-# ===============================================================
-# RESEND CODE (RATE LIMITED)
-# ===============================================================
+
+# RESEND CODE
+
 class ResendVerificationSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
@@ -169,9 +169,9 @@ class ResendVerificationSerializer(serializers.Serializer):
         return code
 
 
-# ===============================================================
-# JWT LOGIN (CHECK VERIFIED + RATE LIMIT)
-# ===============================================================
+
+# JWT LOGIN 
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     username_field = "email"
 
@@ -197,7 +197,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                     "email": email
                 })
         except CustomUser.DoesNotExist:
-            pass  # let normal invalid creds handle it
+            pass  
 
         user = authenticate(email=email, password=password)
 
@@ -211,15 +211,18 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         data["user"] = {
             "id": user.id,
             "email": user.email,
-            "name": user.name
+            "name": user.name,
+            'email_verified': self.user.email_verified,
+            'is_premium': getattr(self.user, 'is_premium', False),
+            'is_staff': self.user.is_staff,  
         }
 
         return data
 
 
-# ===============================================================
-# MANUAL LOGIN SERIALIZER (IF YOU USE IT IN VIEWS)
-# ===============================================================
+
+# LOGIN SERIALIZER 
+
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
@@ -249,9 +252,8 @@ class LoginSerializer(serializers.Serializer):
         return data
 
 
-# ===============================================================
 # USER SERIALIZERS
-# ===============================================================
+
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
@@ -272,9 +274,9 @@ class PublicUserSerializer(serializers.ModelSerializer):
         public_folders = Folder.objects.filter(owner=user, is_public=True)
         return FolderSerializer(public_folders, many=True, context=self.context).data
 
-# -----------------------
+
 # Password reset serializers
-# -----------------------
+
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 

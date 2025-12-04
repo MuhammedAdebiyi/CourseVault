@@ -11,6 +11,11 @@ from .views import (
     CustomerDashboardView,
     PublicUserView,
 )
+from .admin_views import (
+    admin_stats, admin_users, admin_folders, 
+    admin_delete_user, admin_update_user
+)
+
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
@@ -23,4 +28,9 @@ urlpatterns = [
     path('me/', UserProfileView.as_view(), name='user-profile'),
     path('dashboard/', CustomerDashboardView.as_view(), name='customer-dashboard'),
     path('users/<int:user_id>/', PublicUserView.as_view(), name='public-user'),
+    path('admin/stats/', admin_stats, name='admin-stats'),
+    path('admin/users/', admin_users, name='admin-users'),
+    path('admin/folders/', admin_folders, name='admin-folders'),    
+    path('admin/users/<int:user_id>/', admin_update_user, name='admin-update-user'),
+    path('admin/users/<int:user_id>/', admin_delete_user, name='admin-delete-user'),
 ]

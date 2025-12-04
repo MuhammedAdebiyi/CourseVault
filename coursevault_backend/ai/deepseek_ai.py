@@ -1,15 +1,15 @@
 import requests
 from typing import List, Dict
 
-# -----------------------------
+
 # Configuration
-# -----------------------------
-DEESEEK_API_KEY = "YOUR_DEEPSEEK_API_KEY"  # Replace with your key
+
+DEESEEK_API_KEY = "YOUR_DEEPSEEK_API_KEY"  
 DEESEEK_BASE_URL = "https://api.deepseek.ai/v1"
 
-# -----------------------------
+
 # Utility to call DeepSeek
-# -----------------------------
+
 def call_deepseek(endpoint: str, payload: dict) -> dict:
     """
     Call DeepSeek API and return JSON response
@@ -26,9 +26,9 @@ def call_deepseek(endpoint: str, payload: dict) -> dict:
     
     return response.json()
 
-# -----------------------------
+
 # Quiz Generation
-# -----------------------------
+
 def generate_quiz_questions_with_ai(text: str, num_questions: int = 5) -> List[Dict]:
     """
     Generate quiz questions from text using DeepSeek
@@ -36,11 +36,11 @@ def generate_quiz_questions_with_ai(text: str, num_questions: int = 5) -> List[D
     payload = {
         "text": text,
         "num_questions": num_questions,
-        "format": "multiple_choice"  # DeepSeek supports multiple formats
+        "format": "multiple_choice"  
     }
     result = call_deepseek("generate-quiz", payload)
     
-    # Normalize to expected format
+    
     questions = []
     for item in result.get("questions", []):
         questions.append({
@@ -53,9 +53,9 @@ def generate_quiz_questions_with_ai(text: str, num_questions: int = 5) -> List[D
         })
     return questions
 
-# -----------------------------
+
 # Flashcard Generation
-# -----------------------------
+
 def generate_flashcards_with_ai(text: str, num_cards: int = 10) -> List[Dict]:
     """
     Generate flashcards from text using DeepSeek
@@ -74,9 +74,9 @@ def generate_flashcards_with_ai(text: str, num_cards: int = 10) -> List[Dict]:
         })
     return flashcards
 
-# -----------------------------
+
 # Summary Generation
-# -----------------------------
+
 def generate_summary_with_ai(text: str) -> str:
     """
     Generate AI summary from text using DeepSeek

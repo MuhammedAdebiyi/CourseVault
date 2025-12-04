@@ -37,7 +37,7 @@ def generate_quiz_questions_with_ai(text, num_questions=6):
     try:
         return json.loads(result)
     except Exception:
-        # If AI adds extra text
+        
         json_str = result[result.find("["): result.rfind("]") + 1]
         return json.loads(json_str)
 

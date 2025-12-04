@@ -52,6 +52,7 @@ class FolderSerializer(serializers.ModelSerializer):
     pdfs = PDFSerializer(many=True, read_only=True)
     owner_name = serializers.CharField(source='owner.username', read_only=True)
     is_in_library = serializers.SerializerMethodField()
+    share_url = serializers.SerializerMethodField()  # Add this
     
     class Meta:
         model = Folder
@@ -61,8 +62,16 @@ class FolderSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at', 'share_url',
             'share_token', 'library_count', 'is_in_library'
         ]
-        # ✅ CRITICAL FIX: Make owner read-only so POST doesn't require it
         read_only_fields = ['slug', 'share_token', 'created_at', 'updated_at', 'owner', 'owner_name']
+    
+    def get_share_url(self, obj):
+        if obj.is_public and obj.slug:
+            request = self.context.get('request')
+            if request:
+                
+                return f"http://localhost:3000/share/{obj.slug}"  
+            return f"http://localhost:3000/share/{obj.slug}"
+        return None
     
     def get_children(self, obj):
         children = obj.children.filter(deleted_at__isnull=True)
@@ -73,7 +82,6 @@ class FolderSerializer(serializers.ModelSerializer):
         if request and request.user.is_authenticated:
             return obj.added_by.filter(id=request.user.id).exists()
         return False
-
 class UserProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
@@ -82,7 +90,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserProfile
         fields = [
-            'username', 'display_name', 'bio', 'avatar',
+            'username', 'email', 'display_name', 'bio', 'avatar',  
             'username_slug', 'profile_url', 'is_profile_public',
             'public_folders_count', 'public_folders', 'created_at'
         ]

@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import FolderCard from "@/app/components/FolderCard";
 import FileItem from "@/app/components/FileItem";
 import UploadFile from "@/app/components/UploadFile";
+import { FiShare2 } from "react-icons/fi";
+import ShareModal from "@/app/components/ShareModal";
 import CreateFolderModal from "@/app/components/CreateFolderModal";
 import ConfirmDialog from "@/app/components/ConfirmDialog";
 import MoveFileModal from "@/app/components/MoveFileModal";
@@ -29,12 +31,23 @@ export interface Folder {
   children?: Folder[];
   pdfs?: File[]; 
 }
+export interface Folder {
+  id: number;
+  name?: string;
+  title?: string;
+  parentId?: number | null;
+  children?: Folder[];
+  pdfs?: File[];
+  is_public?: boolean;
+  share_url?: string;
+}
 
 export default function FolderDetail() {
   const params = useParams();
   const router = useRouter();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const [loading, setLoading] = useState(true);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [folder, setFolder] = useState<Folder | null>(null);
 
   // Modals
@@ -157,7 +170,12 @@ export default function FolderDetail() {
             </button>
           </div>
         </div>
-
+        <button
+        onClick={() => setShareModalOpen(true)}
+        className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition flex items-center gap-2">
+        <FiShare2 />
+        Share
+      </button>
         {/* Subfolders */}
         <section className="mb-6">
           <h2 className="text-lg font-semibold mb-3">Subfolders</h2>
@@ -222,6 +240,22 @@ export default function FolderDetail() {
         onMove={(fid, fid2) => handleMoveFile(fid, Number(fid2))}
         fileId={selectedFileToMove ?? 0}
       />
+      {shareModalOpen && (
+  <ShareModal
+    folderId={Number(id)}
+    folderTitle={folderName}
+    isPublic={folder.is_public || false}
+    onClose={() => setShareModalOpen(false)}
+    onTogglePublic={() => {
+      // Refresh folder data
+      const fetchFolder = async () => {
+        const res = await api.get(`/folders/${id}/`);
+        setFolder(res.data);
+      };
+      fetchFolder();
+    }}
+  />
+)}
     </div>
   );
 }

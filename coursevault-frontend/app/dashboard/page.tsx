@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Folder } from "react-bootstrap-icons";
 import Link from "next/link";
+import { FolderIcon } from "@heroicons/react/24/outline";
 import api from "../utils/api";
 import { motion } from "framer-motion";
 import { useAuth } from "@/src/context/AuthContext";
@@ -23,6 +24,7 @@ interface FolderData {
   name?: string;
   slug: string;
   files_count: number;
+  is_public:boolean
   last_updated: string | null;
 }
 
@@ -190,11 +192,18 @@ export default function DashboardPage() {
               animate={{ opacity: 1, y: 0 }}
               className="border p-4 rounded hover:shadow cursor-pointer flex items-center justify-between"
             >
-              <Link href={`/folders/${folder.id}`} className="flex items-center gap-3">
-                <Folder className="text-black" size={24} />
-                <div>
-                  <p className="font-semibold">{folder.title || folder.name}</p>
-                  <p className="text-sm text-gray-500">{folder.files_count || 0} files</p>
+              <Link href={`/folders/${folder.id}`} className="flex items-center gap-3 flex-1">
+              <Folder className="text-black" size={24} />
+              <div>
+                 <div className="flex items-center gap-2">
+                    <p className="font-semibold">{folder.title || folder.name}</p>
+                    {folder.is_public && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                    Public
+                </span>
+                )}
+              </div>
+                <p className="text-sm text-gray-500">{folder.files_count || 0} files</p>
                 </div>
               </Link>
 

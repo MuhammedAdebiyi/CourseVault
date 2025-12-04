@@ -91,7 +91,7 @@ class FolderViewSet(viewsets.ModelViewSet):
         return FolderSerializer
     
     def get_queryset(self):
-        # Only show NON-DELETED root folders
+        
         return Folder.objects.filter(
             owner=self.request.user, 
             parent__isnull=True,
@@ -571,7 +571,6 @@ def remove_from_library(request, folder_id):
 
 # PUBLIC FOLDER SHARING
 
-
 @api_view(['POST'])
 def toggle_folder_public(request, folder_id):
    
@@ -604,7 +603,7 @@ def public_folders(request):
         is_public=True,
         deleted_at__isnull=True,
         parent__isnull=True  
-    ).order_by('-updated_at')[:50]
+    ).select_related('owner').order_by('-updated_at')[:50]
     
     serializer = FolderListSerializer(folders, many=True, context={'request': request})
     return Response(serializer.data)
@@ -621,7 +620,7 @@ def trending_folders(request):
         is_public=True,
         deleted_at__isnull=True,
         parent__isnull=True
-    ).annotate(
+    ).select_related('owner').annotate(
         library_adds=Count('added_by')
     ).filter(
         library_adds__gt=0
@@ -630,6 +629,20 @@ def trending_folders(request):
     serializer = FolderListSerializer(folders, many=True, context={'request': request})
     return Response(serializer.data)
 
+
+@api_view(['GET'])
+def discover_profiles(request):
+    """
+    Get public profiles with public folders
+    """
+    profiles = UserProfile.objects.filter(
+        is_profile_public=True,
+        user__owned_folders__is_public=True,
+        user__owned_folders__deleted_at__isnull=True
+    ).select_related('user').distinct().order_by('-updated_at')[:20]
+    
+    serializer = UserProfileSerializer(profiles, many=True, context={'request': request})
+    return Response(serializer.data)
 
 
 @receiver(post_save, sender=User)

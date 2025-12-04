@@ -10,6 +10,7 @@ type User = {
   name: string;
   email_verified: boolean;
   is_premium?: boolean;
+  is_staff: boolean;
   created_at: string;
   is_subscribed?: boolean;
   trial_days_remaining?: number;

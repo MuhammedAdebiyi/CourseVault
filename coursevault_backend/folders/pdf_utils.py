@@ -57,7 +57,7 @@ def extract_text_from_pdf(file_obj) -> Dict:
 
 def generate_quiz_questions_with_ai(pdf_text: str, num_questions: int = 5) -> List[Dict]:
     """
-    ✅ USE CLAUDE AI TO GENERATE QUIZ QUESTIONS
+     USE CLAUDE AI TO GENERATE QUIZ QUESTIONS
     
     Args:
         pdf_text: Extracted PDF text content
@@ -74,7 +74,7 @@ def generate_quiz_questions_with_ai(pdf_text: str, num_questions: int = 5) -> Li
         }]
     """
     
-    # Get API key from environment
+
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
         logger.error("ANTHROPIC_API_KEY not found in environment")
@@ -82,8 +82,8 @@ def generate_quiz_questions_with_ai(pdf_text: str, num_questions: int = 5) -> Li
     
     client = anthropic.Anthropic(api_key=api_key)
     
-    # Truncate text if too long (Claude has context limits)
-    max_chars = 100000  # ~25k tokens
+    
+    max_chars = 100000  
     if len(pdf_text) > max_chars:
         pdf_text = pdf_text[:max_chars] + "\n\n[Content truncated...]"
     
@@ -128,15 +128,14 @@ IMPORTANT: Return ONLY the JSON array, no other text."""
             ]
         )
         
-        # Extract JSON from response
+        
         response_text = message.content[0].text.strip()
         
-        # Remove markdown code fences if present
         if response_text.startswith("```"):
             lines = response_text.split("\n")
             response_text = "\n".join(lines[1:-1])
         
-        # Parse JSON
+        
         import json
         questions = json.loads(response_text)
         
@@ -150,7 +149,7 @@ IMPORTANT: Return ONLY the JSON array, no other text."""
 
 def generate_summary_with_ai(text):
     """
-    ✅ GENERATE PDF SUMMARY USING CLAUDE
+    GENERATE PDF SUMMARY USING CLAUDE
     """
     api_key = os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
@@ -190,7 +189,7 @@ SUMMARY:"""
 
 def generate_flashcards_with_ai(pdf_text: str, num_cards: int = 10) -> List[Dict]:
     """
-    ✅ GENERATE FLASHCARDS FROM PDF
+    GENERATE FLASHCARDS FROM PDF
     
     Returns: [{'front': str, 'back': str}, ...]
     """

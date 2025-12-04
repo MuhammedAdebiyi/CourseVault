@@ -69,7 +69,11 @@ class Folder(models.Model):
     
     @property
     def share_url(self):
-        return f"/share/{self.slug}"
+        if self.is_public and self.slug:
+        
+            domain = "http://localhost:3000" 
+            return f"{domain}/share/{self.slug}"
+        return None
     
     @property
     def library_count(self):
@@ -214,7 +218,7 @@ class AIGeneratedQuestion(models.Model):
 
 class QuizAttempt(models.Model):
     """
-    ✅ TRACK USER QUIZ ATTEMPTS
+     TRACK USER QUIZ ATTEMPTS
     """
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     pdf = models.ForeignKey(PDF, on_delete=models.CASCADE)
@@ -225,7 +229,7 @@ class QuizAttempt(models.Model):
     score_percentage = models.FloatField()
     
     # Answers
-    answers = models.JSONField()  # {"question_id": "A", ...}
+    answers = models.JSONField()  
     
     completed_at = models.DateTimeField(auto_now_add=True)
     time_taken_seconds = models.IntegerField(null=True, blank=True)

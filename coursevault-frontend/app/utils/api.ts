@@ -7,8 +7,8 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  timeout: 180000, 
 });
-
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("access_token");
@@ -17,7 +17,6 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
-
 
 api.interceptors.response.use(
   (response) => response,

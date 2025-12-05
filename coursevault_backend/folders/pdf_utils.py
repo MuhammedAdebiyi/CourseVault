@@ -1,244 +1,200 @@
+from django.conf import settings
+from openai import OpenAI
 import PyPDF2
 import io
-import logging
-from typing import Dict, List
-import anthropic
+import json
+import math
 import os
 
-logger = logging.getLogger(__name__)
-
-
-def extract_text_from_pdf(file_obj) -> Dict:
-    """
-    Extract text content from a PDF file
-    Returns: {
-        'text': str,
-        'page_count': int,
-        'success': bool,
-        'error': str (if failed)
-    }
-    """
+def extract_text_from_pdf(pdf_file):
+    """Extract text from PDF file"""
     try:
-        # Reset file pointer
-        file_obj.seek(0)
-        
-        # Read PDF
-        pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_obj.read()))
-        
-        # Extract text from all pages
-        text_content = []
-        for page_num, page in enumerate(pdf_reader.pages, 1):
-            try:
-                text = page.extract_text()
-                if text.strip():
-                    text_content.append(f"--- Page {page_num} ---\n{text}")
-            except Exception as e:
-                logger.warning(f"Failed to extract text from page {page_num}: {e}")
-                continue
-        
-        full_text = "\n\n".join(text_content)
-        
-        return {
-            'text': full_text,
-            'page_count': len(pdf_reader.pages),
-            'success': True,
-            'error': None
-        }
-    
+        pdf_file.seek(0)
+        pdf_reader = PyPDF2.PdfReader(pdf_file)
+        text = ""
+        page_count = len(pdf_reader.pages)
+        for page in pdf_reader.pages:
+            text += page.extract_text() + "\n"
+        return {'success': True, 'text': text.strip(), 'page_count': page_count}
     except Exception as e:
-        logger.error(f"PDF text extraction failed: {e}")
-        return {
-            'text': '',
-            'page_count': 0,
-            'success': False,
-            'error': str(e)
-        }
+        return {'success': False, 'error': str(e)}
 
 
-def generate_quiz_questions_with_ai(pdf_text: str, num_questions: int = 5) -> List[Dict]:
-    """
-     USE CLAUDE AI TO GENERATE QUIZ QUESTIONS
-    
-    Args:
-        pdf_text: Extracted PDF text content
-        num_questions: Number of questions to generate
-    
-    Returns:
-        List of question dicts: [{
-            'question': str,
-            'options': {'A': str, 'B': str, 'C': str, 'D': str},
-            'correct_answer': str,
-            'explanation': str,
-            'difficulty': str,
-            'source_text': str
-        }]
-    """
-    
+def chunk_text(text, max_chars=3000):
+    """Split text into smaller chunks for AI processing"""
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = min(start + max_chars, len(text))
+        chunks.append(text[start:end])
+        start = end
+    return chunks
 
-    api_key = os.environ.get('ANTHROPIC_API_KEY')
-    if not api_key:
-        logger.error("ANTHROPIC_API_KEY not found in environment")
-        return []
-    
-    client = anthropic.Anthropic(api_key=api_key)
-    
-    
-    max_chars = 100000  
-    if len(pdf_text) > max_chars:
-        pdf_text = pdf_text[:max_chars] + "\n\n[Content truncated...]"
-    
-    prompt = f"""Based on the following PDF content, generate {num_questions} multiple-choice quiz questions.
 
-PDF CONTENT:
-{pdf_text}
-
-REQUIREMENTS:
-1. Generate exactly {num_questions} questions
-2. Each question should have 4 options (A, B, C, D)
-3. Include the correct answer
-4. Provide a brief explanation for the correct answer
-5. Classify difficulty as: easy, medium, or hard
-6. Include a snippet of source text used for the question
-
-OUTPUT FORMAT (JSON):
-[
-  {{
-    "question": "What is the main topic discussed?",
-    "options": {{
-      "A": "Option A text",
-      "B": "Option B text",
-      "C": "Option C text",
-      "D": "Option D text"
-    }},
-    "correct_answer": "B",
-    "explanation": "Brief explanation of why B is correct",
-    "difficulty": "medium",
-    "source_text": "Relevant excerpt from the PDF"
-  }}
-]
-
-IMPORTANT: Return ONLY the JSON array, no other text."""
-    
+# --- Quiz functions ---
+def generate_quiz_questions_with_ai(text, pdf_id=None, num_questions=5, question_type="objective"):
+    """Generate quiz questions with chunking and duplicate prevention"""
     try:
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4000,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        
-        
-        response_text = message.content[0].text.strip()
-        
-        if response_text.startswith("```"):
-            lines = response_text.split("\n")
-            response_text = "\n".join(lines[1:-1])
-        
-        
-        import json
-        questions = json.loads(response_text)
-        
-        logger.info(f"Generated {len(questions)} questions using Claude AI")
+        previous_questions = []
+        if pdf_id:
+            data = load_generated_questions(pdf_id)
+            previous_questions = [q['question'] for q in data.get(question_type, [])]
+
+        client = OpenAI(api_key=settings.DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+        text_chunks = chunk_text(text, max_chars=3000)
+        questions = []
+        questions_per_chunk = math.ceil(num_questions / len(text_chunks))
+
+        for chunk in text_chunks:
+            if question_type == "objective":
+                prompt = f"""Generate {questions_per_chunk} unique multiple-choice questions based on the text below.
+Avoid duplicating questions that have already been generated.
+
+Text:
+{chunk}
+
+Provide for each question:
+1. Question
+2. Four options (A, B, C, D)
+3. Correct answer (A/B/C/D)
+4. Explanation
+5. Difficulty (easy, medium, hard)
+
+Return as a JSON array only."""
+            else:
+                prompt = f"""Generate {questions_per_chunk} unique theory/descriptive questions based on the text below.
+Avoid duplicating questions that have already been generated.
+
+Text:
+{chunk}
+
+Provide for each question:
+1. Question
+2. Detailed answer or guideline
+3. Difficulty (easy, medium, hard)
+
+Return as a JSON array only."""
+
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": "You are a helpful educational assistant that creates quiz questions."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+            )
+
+            content = response.choices[0].message.content.strip()
+            if content.startswith("```json"):
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif content.startswith("```"):
+                content = content.split("```")[1].split("```")[0].strip()
+
+            chunk_questions = json.loads(content)
+            chunk_questions = [q for q in chunk_questions if q['question'] not in previous_questions]
+            previous_questions.extend([q['question'] for q in chunk_questions])
+            questions.extend(chunk_questions)
+
+        questions = questions[:num_questions]
+
+        if pdf_id:
+            save_generated_questions(pdf_id, questions, question_type=question_type)
+
         return questions
-    
+
     except Exception as e:
-        logger.error(f"AI question generation failed: {e}")
+        print(f"Quiz generation error: {e}")
         return []
 
 
+def get_generated_questions_file(pdf_id):
+    folder = os.path.join(settings.BASE_DIR, "generated_questions")
+    os.makedirs(folder, exist_ok=True)
+    return os.path.join(folder, f"pdf_{pdf_id}_questions.json")
+
+
+def load_generated_questions(pdf_id):
+    path = get_generated_questions_file(pdf_id)
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"objective": [], "theory": []}
+
+
+def save_generated_questions(pdf_id, questions, question_type="objective"):
+    existing = load_generated_questions(pdf_id)
+    existing[question_type].extend(questions)
+    path = get_generated_questions_file(pdf_id)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(existing, f, ensure_ascii=False, indent=2)
+
+
+# --- Summary function ---
 def generate_summary_with_ai(text):
-    """
-    GENERATE PDF SUMMARY USING CLAUDE
-    """
-    api_key = os.environ.get('ANTHROPIC_API_KEY')
-    if not api_key:
-        return ""
-    
-    client = anthropic.Anthropic(api_key=api_key)
-    
-    # Truncate if needed
-    max_chars = 100000
-    if len(pdf_text) > max_chars:
-        pdf_text = pdf_text[:max_chars]
-    
-    prompt = f"""Summarize the following PDF content in 3-5 clear, concise paragraphs. Focus on the main points and key takeaways.
-
-PDF CONTENT:
-{pdf_text}
-
-SUMMARY:"""
-    
+    """Generate summary using DeepSeek"""
     try:
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1000,
+        client = OpenAI(api_key=settings.DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+        max_chars = 12000
+        if len(text) > max_chars:
+            text = text[:max_chars] + "..."
+        prompt = f"""Please provide a comprehensive summary of the following text. 
+The summary should:
+- Capture the main points and key ideas
+- Be well-organized with clear structure
+- Be around 200-300 words
+- Use bullet points for better readability
+
+Text:
+{text}"""
+        response = client.chat.completions.create(
+            model="deepseek-chat",
             messages=[
+                {"role": "system", "content": "You are a helpful assistant that creates clear, concise summaries."},
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            temperature=0.7,
         )
-        
-        summary = message.content[0].text.strip()
-        logger.info("Generated PDF summary using Claude AI")
+        summary = response.choices[0].message.content.strip()
         return summary
-    
     except Exception as e:
-        logger.error(f"AI summary generation failed: {e}")
-        return ""
+        print(f"Summary generation error: {e}")
+        return None
 
 
-def generate_flashcards_with_ai(pdf_text: str, num_cards: int = 10) -> List[Dict]:
-    """
-    GENERATE FLASHCARDS FROM PDF
-    
-    Returns: [{'front': str, 'back': str}, ...]
-    """
-    api_key = os.environ.get('ANTHROPIC_API_KEY')
-    if not api_key:
-        return []
-    
-    client = anthropic.Anthropic(api_key=api_key)
-    
-    max_chars = 100000
-    if len(pdf_text) > max_chars:
-        pdf_text = pdf_text[:max_chars]
-    
-    prompt = f"""Create {num_cards} flashcards from the following PDF content. Each flashcard should have a question/term on the front and answer/definition on the back.
-
-PDF CONTENT:
-{pdf_text}
-
-OUTPUT FORMAT (JSON):
-[
-  {{
-    "front": "Question or term",
-    "back": "Answer or definition"
-  }}
-]
-
-Return ONLY the JSON array."""
-    
+# --- Flashcards function ---
+def generate_flashcards_with_ai(text, num_cards=10):
+    """Generate flashcards using DeepSeek"""
     try:
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=2000,
+        client = OpenAI(api_key=settings.DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+        max_chars = 8000
+        if len(text) > max_chars:
+            text = text[:max_chars] + "..."
+        prompt = f"""Based on the following text, create {num_cards} flashcards for studying.
+
+Text:
+{text}
+
+Each flashcard should have:
+- Front: A question or term
+- Back: The answer or definition
+
+Format your response as a JSON array only."""
+
+        response = client.chat.completions.create(
+            model="deepseek-chat",
             messages=[
+                {"role": "system", "content": "You are a helpful educational assistant that creates study flashcards."},
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            temperature=0.7,
         )
-        
-        response_text = message.content[0].text.strip()
-        
-        if response_text.startswith("```"):
-            lines = response_text.split("\n")
-            response_text = "\n".join(lines[1:-1])
-        
-        import json
-        flashcards = json.loads(response_text)
-        
-        logger.info(f"Generated {len(flashcards)} flashcards")
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```json"):
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif content.startswith("```"):
+            content = content.split("```")[1].split("```")[0].strip()
+        flashcards = json.loads(content)
         return flashcards
-    
     except Exception as e:
-        logger.error(f"Flashcard generation failed: {e}")
+        print(f"Flashcard generation error: {e}")
         return []

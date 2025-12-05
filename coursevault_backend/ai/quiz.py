@@ -1,5 +1,5 @@
 import json
-from .deepseek_client import deepseek_chat  # We'll create this in Step 2
+from .deepseek_client import deepseek_chat  
 
 def generate_quiz_questions_with_ai(text, num_questions=6):
     """

@@ -32,7 +32,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from datetime import timedelta
 from django.contrib.auth import get_user_model
-from ai.quiz import generate_quiz_questions_with_ai
+from ai.quiz import generate_quiz_questions_with_ai as generate_ai_questions
 from django.db.models import Prefetch
 User = get_user_model()
 
@@ -794,13 +794,27 @@ def search_pdf_content(request):
 def generate_quiz(request, pdf_id):
     """
     Generate quiz questions from PDF using AI
-    Body: { "num_questions": 5, "types": ["objective","theory"] }
+    Body: {
+        "num_objective": 30,
+        "num_theory": 10,
+        "question_type": "objective"  # or "theory" or "both"
+    }
     """
     user = request.user
     pdf = get_object_or_404(PDF, id=pdf_id, folder__owner=user, deleted_at__isnull=True)
-    
-    num_questions = request.data.get('num_questions', 5)
-    types = request.data.get('types', ['objective'])  # default to objective
+
+    # Extract parameters
+    num_objective = int(request.data.get("num_objective", 30))
+    num_theory = int(request.data.get("num_theory", 5))
+    question_type = request.data.get("question_type", "both").lower()
+
+    # Validate ranges
+    if question_type in ["objective", "both"] and not (30 <= num_objective <= 60):
+        return Response({"error": "num_objective must be between 30 and 60"}, status=400)
+    if question_type in ["theory", "both"] and not (5 <= num_theory <= 15):
+        return Response({"error": "num_theory must be between 5 and 15"}, status=400)
+    if question_type not in ["objective", "theory", "both"]:
+        return Response({"error": "question_type must be 'objective', 'theory', or 'both'"}, status=400)
 
     # Extract text if needed
     if pdf.text_extraction_status != 'completed' or not pdf.extracted_text:
@@ -813,49 +827,45 @@ def generate_quiz(request, pdf_id):
         else:
             return Response({'error': 'Failed to extract PDF text'}, status=500)
 
-    # Check if questions already exist
-    existing_questions = AIGeneratedQuestion.objects.filter(pdf=pdf)
-    if existing_questions.exists():
-        return Response({
-            'message': 'Questions already generated',
-            'count': existing_questions.count(),
-            'questions': [
-                {
-                    'id': q.id,
-                    'question': q.question,
-                    'options': q.options,
-                    'correct_answer': q.correct_answer,
-                    'explanation': q.explanation,
-                    'difficulty': q.difficulty,
-                    'type': q.type,
-                }
-                for q in existing_questions
-            ]
-        })
-
     created_questions = []
-    try:
-        for q_type in types:
-            # generate num_questions for each type
-            questions_data = generate_quiz_questions_with_ai(pdf.extracted_text, num_questions, question_type=q_type)
-            for q_data in questions_data:
-                question = AIGeneratedQuestion.objects.create(
-                    pdf=pdf,
-                    question=q_data['question'],
-                    options=q_data['options'],
-                    correct_answer=q_data['correct_answer'],
-                    explanation=q_data.get('explanation', ''),
-                    difficulty=q_data.get('difficulty', 'medium'),
-                    source_text=q_data.get('source_text', ''),
-                    type=q_type
-                )
-                created_questions.append(question)
-    except Exception as e:
-        return Response({'error': f'Failed to generate questions: {str(e)}'}, status=500)
+
+    # Generate objective questions
+    if question_type in ["objective", "both"]:
+        obj_questions = generate_quiz_questions_with_ai(
+            pdf.extracted_text, num_questions=num_objective, question_type="objective"
+        )
+        for q in obj_questions:
+            question = AIGeneratedQuestion.objects.create(
+                pdf=pdf,
+                question=q['question'],
+                options=q['options'],
+                correct_answer=q['correct_answer'],
+                explanation=q.get('explanation', ''),
+                difficulty=q.get('difficulty', 'medium'),
+                type='objective'
+            )
+            created_questions.append(question)
+
+    # Generate theory questions
+    if question_type in ["theory", "both"]:
+        theory_questions = generate_quiz_questions_with_ai(
+            pdf.extracted_text, num_questions=num_theory, question_type="theory"
+        )
+        for q in theory_questions:
+            question = AIGeneratedQuestion.objects.create(
+                pdf=pdf,
+                question=q['question'],
+                options=[],
+                correct_answer='',
+                explanation=q.get('answer', ''),
+                difficulty=q.get('difficulty', 'medium'),
+                type='theory'
+            )
+            created_questions.append(question)
 
     return Response({
-        'message': f'Generated {len(created_questions)} questions',
-        'count': len(created_questions),
+        'message': f'{len(created_questions)} questions generated',
+        'total_questions_for_pdf': AIGeneratedQuestion.objects.filter(pdf=pdf).count(),
         'questions': [
             {
                 'id': q.id,
@@ -865,11 +875,9 @@ def generate_quiz(request, pdf_id):
                 'explanation': q.explanation,
                 'difficulty': q.difficulty,
                 'type': q.type,
-            }
-            for q in created_questions
+            } for q in created_questions
         ]
     }, status=201)
-
 
 
 @api_view(['GET'])
@@ -969,6 +977,12 @@ def generate_summary(request, pdf_id):
             pdf.save()
         else:
             return Response({'error': 'Failed to extract text'}, status=500)
+    
+    # Check if API key is configured
+    if not settings.DEEPSEEK_API_KEY:
+        return Response({
+            'error': 'AI service not configured. Please add DEEPSEEK_API_KEY to environment variables.'
+        }, status=500)
     
     # Generate summary
     summary = generate_summary_with_ai(pdf.extracted_text)

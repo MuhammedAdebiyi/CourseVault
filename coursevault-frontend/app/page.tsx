@@ -8,9 +8,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Simulate loading (you can replace this with actual API fetching)
+  
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1000); // 1s delay
+    const timer = setTimeout(() => setLoading(false), 1000); 
     return () => clearTimeout(timer);
   }, []);
 

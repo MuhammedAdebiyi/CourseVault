@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/src/context/AuthContext";
 import { List } from "react-bootstrap-icons";
@@ -17,6 +18,7 @@ import {
   FiClock,
   FiHeart,
   FiCompass,
+  FiMail,
 } from "react-icons/fi";
 
 type Props = {
@@ -35,10 +37,8 @@ export default function Navbar({ showBottomNav = false }: Props) {
   return (
     <>
       <header className="w-full bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center gap-4">
-        {/* Logo */}
-        <Link href="/" className="text-lg font-bold">
-          CourseVault
-        </Link>
+        
+          <span className="font-semibold text-xl">CourseVault</span>
 
         {/* Desktop SearchBar */}
         <div className="hidden md:block w-1/3">
@@ -84,6 +84,9 @@ export default function Navbar({ showBottomNav = false }: Props) {
 
               <Link href="/trash" className="flex items-center gap-2 hover:text-blue-600">
                 <FiTrash2 size={18} /> Trash
+              </Link>
+              <Link href="/contact" className="flex items-center gap-2 hover:text-blue-600">
+                <FiMail size={18} /> Contact
               </Link>
 
               <button

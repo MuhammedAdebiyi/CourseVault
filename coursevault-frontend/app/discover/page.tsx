@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { FiTrendingUp, FiCompass, FiUsers } from "react-icons/fi";
 import api from "@/app/utils/api";
+import Link from "next/link";
 import PublicFolderCard from "../components/PublicFolderCard";
 
 interface PublicFolder {
@@ -172,48 +173,49 @@ export default function DiscoverPage() {
       )}
 
       {activeTab === "creators" && (
-        <div>
-          {profiles.length === 0 ? (
-            <div className="text-center py-16">
-              <FiUsers size={48} className="mx-auto text-gray-300 mb-4" />
-              <p className="text-gray-600">No creators found</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {profiles.map((profile) => (
-                <a
-                  key={profile.username_slug}
-                  href={`/profile/${profile.username_slug}`}
-                  className="bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all p-6"
-                >
-                  {/* Avatar */}
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold mb-4 mx-auto">
-                    {profile.display_name.charAt(0).toUpperCase()}
-                  </div>
+  <div>
+    {profiles.length === 0 ? (
+      <div className="text-center py-16">
+        <FiUsers size={48} className="mx-auto text-gray-300 mb-4" />
+        <p className="text-gray-600">No creators found</p>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {profiles.map((profile) => (
+          <Link
+            key={profile.username_slug}
+            href={`/profile/${profile.username_slug}`}
+          >
+            <div className="bg-white rounded-xl border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all p-6 cursor-pointer">
+              {/* Avatar */}
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold mb-4 mx-auto">
+                {profile.display_name.charAt(0).toUpperCase()}
+              </div>
 
-                  {/* Name */}
-                  <h3 className="text-xl font-semibold text-gray-900 text-center mb-1">
-                    {profile.display_name}
-                  </h3>
-                  <p className="text-sm text-gray-600 text-center mb-4">
-                    @{profile.username}
-                  </p>
+              {/* Name */}
+              <h3 className="text-xl font-semibold text-gray-900 text-center mb-1">
+                {profile.display_name}
+              </h3>
+              <p className="text-sm text-gray-600 text-center mb-4">
+                @{profile.username}
+              </p>
 
-                  {/* Stats */}
-                  <div className="text-center">
-                    <p className="text-gray-600 text-sm">
-                      <span className="font-semibold text-blue-600">
-                        {profile.public_folders_count}
-                      </span>{" "}
-                      public folders
-                    </p>
-                  </div>
-                </a>
-              ))}
+              {/* Stats */}
+              <div className="text-center">
+                <p className="text-gray-600 text-sm">
+                  <span className="font-semibold text-blue-600">
+                    {profile.public_folders_count}
+                  </span>{" "}
+                  public folders
+                </p>
+              </div>
             </div>
-          )}
-        </div>
-      )}
+          </Link>
+        ))}
+      </div>
+    )}
+  </div>
+)}
     </div>
   );
 }

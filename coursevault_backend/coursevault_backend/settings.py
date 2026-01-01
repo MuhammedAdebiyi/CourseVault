@@ -1,6 +1,3 @@
-"""
-Django settings for coursevault_backend project.
-"""
 import os 
 from pathlib import Path
 import logging
@@ -14,9 +11,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY
 
-SECRET_KEY = '***REMOVED***'
+SECRET_KEY = os.getenv("SECRET_KEY")
 DEBUG = True
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+
+# DeepSeek
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+
 
 # INSTALLED APPS
 
@@ -130,9 +131,9 @@ EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = "devbyadebiyi@gmail.com"
-EMAIL_HOST_PASSWORD = "***REMOVED***"
-DEFAULT_FROM_EMAIL = "CourseVault <devbyadebiyi@gmail.com>"
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = f"CourseVault <{os.getenv('EMAIL_HOST_USER')}>"
 
 
 # INTERNATIONALIZATION
@@ -147,27 +148,24 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-
-# CLOUDFLARE R2 STORAGE
-
+# Cloudflare R2 Storage
 STORAGES = {
-    "default": {  
+    "default": {
         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         "OPTIONS": {
-            "access_key": "***REMOVED***",
-            "secret_key": "***REMOVED***",
+            "access_key": os.getenv("CLOUDFLARE_R2_ACCESS_KEY"),
+            "secret_key": os.getenv("CLOUDFLARE_R2_SECRET_KEY"),
             "bucket_name": "coursevault-files",
             "endpoint_url": "https://04ae8418853853c716df4f26bbc75fdd.r2.cloudflarestorage.com",
         },
     },
-    "staticfiles": {  
+    "staticfiles": {
         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         "OPTIONS": {
-            "access_key": "***REMOVED***",
-            "secret_key": "***REMOVED***",
+            "access_key": os.getenv("CLOUDFLARE_R2_ACCESS_KEY"),
+            "secret_key": os.getenv("CLOUDFLARE_R2_SECRET_KEY"),
             "bucket_name": "coursevault-files",
             "endpoint_url": "https://04ae8418853853c716df4f26bbc75fdd.r2.cloudflarestorage.com",
-           
         },
     },
 }
